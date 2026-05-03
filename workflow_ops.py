@@ -175,16 +175,109 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
 class SCULPTKIT_OT_workflow_bake(Operator):
     bl_idname = "sculpt_kit.workflow_bake"
     bl_label = "Bake Maps"
-    bl_description = "Bake normal map from the high-poly source to the low-poly retopo target"
+    bl_description = (
+        "Bake a normal map from the high-poly source to the active low-poly mesh. "
+        "Auto-pairs '<name>_retopo' with '<name>'; otherwise uses any other selected mesh as source"
+    )
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
         return _active_mesh(context) is not None
 
+    def _resolve_high_poly(self, context, low):
+        if low.name.endswith("_retopo"):
+            base = low.name[: -len("_retopo")]
+            obj = bpy.data.objects.get(base)
+            if obj is not None and obj.type == 'MESH':
+                return obj
+        for o in context.selected_objects:
+            if o is not low and o.type == 'MESH':
+                return o
+        return None
+
     def execute(self, context):
-        self.report({'INFO'}, "Bake Maps — not implemented yet")
-        return {'CANCELLED'}
+        low = _active_mesh(context)
+        high = self._resolve_high_poly(context, low)
+        if high is None:
+            self.report({'ERROR'}, "No high-poly source — name it '<low>_retopo' or select it alongside")
+            return {'CANCELLED'}
+
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        if not low.data.uv_layers:
+            bpy.ops.object.select_all(action='DESELECT')
+            low.select_set(True)
+            context.view_layer.objects.active = low
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.uv.smart_project(angle_limit=66.0, island_margin=0.005)
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        img_name = f"{low.name}_normal"
+        img = bpy.data.images.get(img_name)
+        if img is None:
+            img = bpy.data.images.new(
+                img_name, width=2048, height=2048, alpha=False, float_buffer=False
+            )
+            img.colorspace_settings.name = 'Non-Color'
+
+        mat_name = f"{low.name}_bake_mat"
+        mat = bpy.data.materials.get(mat_name)
+        if mat is None:
+            mat = bpy.data.materials.new(mat_name)
+            mat.use_nodes = True
+        if mat.name not in [m.name for m in low.data.materials if m]:
+            low.data.materials.append(mat)
+
+        nodes = mat.node_tree.nodes
+        tex_node = next(
+            (n for n in nodes if n.type == 'TEX_IMAGE' and n.image == img), None
+        )
+        if tex_node is None:
+            tex_node = nodes.new('ShaderNodeTexImage')
+            tex_node.image = img
+        nodes.active = tex_node
+
+        scene = context.scene
+        prior_engine = scene.render.engine
+        scene.render.engine = 'CYCLES'
+
+        max_dim = _max_bbox_dim(high)
+        scene.render.bake.use_selected_to_active = True
+        scene.render.bake.cage_extrusion = max_dim * 0.01
+        scene.render.bake.max_ray_distance = max_dim * 0.05
+        scene.cycles.bake_type = 'NORMAL'
+
+        bpy.ops.object.select_all(action='DESELECT')
+        was_hidden = high.hide_get()
+        if was_hidden:
+            high.hide_set(False)
+        high.select_set(True)
+        low.hide_set(False)
+        low.select_set(True)
+        context.view_layer.objects.active = low
+
+        try:
+            bpy.ops.object.bake(type='NORMAL')
+        except RuntimeError as e:
+            scene.render.engine = prior_engine
+            if was_hidden:
+                high.hide_set(True)
+            self.report({'ERROR'}, f"Bake failed: {e}")
+            return {'CANCELLED'}
+
+        scene.render.engine = prior_engine
+        if was_hidden:
+            high.hide_set(True)
+        img.pack()
+
+        self.report(
+            {'INFO'},
+            f"Baked '{img.name}' 2048² from '{high.name}' → '{low.name}'",
+        )
+        return {'FINISHED'}
 
 
 _classes = (
