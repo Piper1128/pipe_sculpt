@@ -120,8 +120,56 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
         return _active_mesh(context) is not None
 
     def execute(self, context):
-        self.report({'INFO'}, "Retopo — not implemented yet")
-        return {'CANCELLED'}
+        obj = _active_mesh(context)
+        preset = _selected_preset(context)
+        prefs = context.preferences.addons[__package__].preferences
+        target_faces = getattr(prefs, preset.target_faces_attr)
+
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        bpy.ops.object.duplicate(linked=False)
+        retopo = context.active_object
+        retopo.name = f"{obj.name}_retopo"
+
+        for m in list(retopo.modifiers):
+            if m.type == 'MULTIRES':
+                try:
+                    bpy.ops.object.modifier_apply(modifier=m.name)
+                except RuntimeError:
+                    retopo.modifiers.remove(m)
+
+        sym_axes = set()
+        if preset.use_symmetry_x:
+            sym_axes.add('X')
+        if preset.use_symmetry_y:
+            sym_axes.add('Y')
+        if preset.use_symmetry_z:
+            sym_axes.add('Z')
+
+        try:
+            bpy.ops.object.quadriflow_remesh(
+                target_faces=target_faces,
+                use_mesh_symmetry=bool(sym_axes),
+                mesh_symmetry_axes=sym_axes,
+                use_preserve_sharp=False,
+                use_preserve_boundary=False,
+                smooth_normals=True,
+                mode='FACES',
+            )
+        except RuntimeError as e:
+            self.report({'ERROR'}, f"Quadriflow failed: {e}")
+            return {'CANCELLED'}
+
+        obj.hide_set(True)
+        self.report(
+            {'INFO'},
+            f"Retopo'd '{obj.name}' → '{retopo.name}' ({target_faces} faces, sym={sorted(sym_axes) or 'none'})",
+        )
+        return {'FINISHED'}
 
 
 class SCULPTKIT_OT_workflow_bake(Operator):
