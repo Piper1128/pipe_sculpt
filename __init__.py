@@ -1,7 +1,8 @@
 from . import preferences
+from . import pie_menus
 from . import keymap
 
-_modules = (preferences, keymap)
+_modules = (preferences, pie_menus, keymap)
 
 
 def register():
