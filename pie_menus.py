@@ -8,13 +8,23 @@ from . import preferences as prefs_mod
 class SCULPTKIT_OT_activate_brush(Operator):
     bl_idname = "sculpt_kit.activate_brush"
     bl_label = "Activate Brush"
+    bl_description = "Activate the named brush from Blender's Essentials sculpt brush library"
     bl_options = {'INTERNAL'}
 
-    asset_name: StringProperty()
+    asset_name: StringProperty(
+        name="Asset Name",
+        description="Brush asset name inside essentials_brushes-mesh_sculpt.blend",
+    )
 
     @classmethod
     def poll(cls, context):
         return context.mode == 'SCULPT'
+
+    @classmethod
+    def description(cls, context, properties):
+        if properties.asset_name:
+            return f"Activate '{properties.asset_name}' brush"
+        return cls.bl_description
 
     def execute(self, context):
         if not self.asset_name:
