@@ -11,6 +11,7 @@ class Preset:
     use_symmetry_z: bool
     multires_levels: int
     target_faces_attr: str
+    target_faces_default: int
 
 
 PRESETS: tuple[Preset, ...] = (
@@ -23,6 +24,7 @@ PRESETS: tuple[Preset, ...] = (
         use_symmetry_z=False,
         multires_levels=4,
         target_faces_attr='target_faces_character',
+        target_faces_default=22000,
     ),
     Preset(
         id='BUST',
@@ -33,6 +35,7 @@ PRESETS: tuple[Preset, ...] = (
         use_symmetry_z=False,
         multires_levels=5,
         target_faces_attr='target_faces_bust',
+        target_faces_default=14000,
     ),
     Preset(
         id='PROP',
@@ -43,6 +46,7 @@ PRESETS: tuple[Preset, ...] = (
         use_symmetry_z=False,
         multires_levels=3,
         target_faces_attr='target_faces_prop',
+        target_faces_default=8000,
     ),
 )
 

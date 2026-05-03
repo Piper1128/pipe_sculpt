@@ -21,6 +21,13 @@ def _selected_preset(context) -> presets_mod.Preset:
     return presets_mod.PRESETS_BY_ID.get(pid, presets_mod.PRESETS_BY_ID[presets_mod.DEFAULT_PRESET_ID])
 
 
+def _target_faces(context, preset: presets_mod.Preset) -> int:
+    addon = context.preferences.addons.get(__package__)
+    if addon is not None:
+        return getattr(addon.preferences, preset.target_faces_attr)
+    return preset.target_faces_default
+
+
 class SCULPTKIT_OT_workflow_start(Operator):
     bl_idname = "sculpt_kit.workflow_start"
     bl_label = "Start Sculpt"
@@ -52,10 +59,11 @@ class SCULPTKIT_OT_workflow_start(Operator):
         ts.use_symmetry_y = preset.use_symmetry_y
         ts.use_symmetry_z = preset.use_symmetry_z
 
-        try:
-            bpy.ops.object.voxel_remesh()
-        except RuntimeError as e:
-            self.report({'WARNING'}, f"Initial voxel remesh failed: {e}")
+        if not bpy.app.background:
+            try:
+                bpy.ops.object.voxel_remesh()
+            except RuntimeError as e:
+                self.report({'WARNING'}, f"Initial voxel remesh failed: {e}")
 
         self.report(
             {'INFO'},
@@ -122,8 +130,7 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
     def execute(self, context):
         obj = _active_mesh(context)
         preset = _selected_preset(context)
-        prefs = context.preferences.addons[__package__].preferences
-        target_faces = getattr(prefs, preset.target_faces_attr)
+        target_faces = _target_faces(context, preset)
 
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -142,19 +149,12 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
                 except RuntimeError:
                     retopo.modifiers.remove(m)
 
-        sym_axes = set()
-        if preset.use_symmetry_x:
-            sym_axes.add('X')
-        if preset.use_symmetry_y:
-            sym_axes.add('Y')
-        if preset.use_symmetry_z:
-            sym_axes.add('Z')
+        use_sym = preset.use_symmetry_x or preset.use_symmetry_y or preset.use_symmetry_z
 
         try:
             bpy.ops.object.quadriflow_remesh(
                 target_faces=target_faces,
-                use_mesh_symmetry=bool(sym_axes),
-                mesh_symmetry_axes=sym_axes,
+                use_mesh_symmetry=use_sym,
                 use_preserve_sharp=False,
                 use_preserve_boundary=False,
                 smooth_normals=True,
@@ -167,7 +167,7 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
         obj.hide_set(True)
         self.report(
             {'INFO'},
-            f"Retopo'd '{obj.name}' → '{retopo.name}' ({target_faces} faces, sym={sorted(sym_axes) or 'none'})",
+            f"Retopo'd '{obj.name}' → '{retopo.name}' ({target_faces} faces, sym={use_sym})",
         )
         return {'FINISHED'}
 
