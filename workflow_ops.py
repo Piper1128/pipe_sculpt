@@ -68,7 +68,7 @@ class SCULPTKIT_OT_workflow_start(Operator):
 class SCULPTKIT_OT_workflow_add_detail(Operator):
     bl_idname = "sculpt_kit.workflow_add_detail"
     bl_label = "Add Detail"
-    bl_description = "Convert to multires and subdivide to the preset's detail level"
+    bl_description = "Step the multires modifier up by one level, toward the preset's target"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -76,8 +76,37 @@ class SCULPTKIT_OT_workflow_add_detail(Operator):
         return _active_mesh(context) is not None
 
     def execute(self, context):
-        self.report({'INFO'}, "Add Detail — not implemented yet")
-        return {'CANCELLED'}
+        obj = _active_mesh(context)
+        preset = _selected_preset(context)
+        target_levels = preset.multires_levels
+
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        bpy.ops.object.shade_smooth()
+
+        mod = next((m for m in obj.modifiers if m.type == 'MULTIRES'), None)
+        if mod is None:
+            mod = obj.modifiers.new(name="SculptKit Multires", type='MULTIRES')
+
+        if mod.total_levels >= target_levels:
+            self.report({'INFO'}, f"Already at preset target level {target_levels}")
+            bpy.ops.object.mode_set(mode='SCULPT')
+            return {'CANCELLED'}
+
+        try:
+            bpy.ops.object.multires_subdivide(modifier=mod.name, mode='CATMULL_CLARK')
+        except RuntimeError as e:
+            self.report({'ERROR'}, f"Multires subdivide failed: {e}")
+            return {'CANCELLED'}
+
+        mod.levels = mod.total_levels
+        mod.sculpt_levels = mod.total_levels
+        mod.render_levels = mod.total_levels
+
+        bpy.ops.object.mode_set(mode='SCULPT')
+        self.report({'INFO'}, f"Multires {mod.total_levels} / {target_levels}")
+        return {'FINISHED'}
 
 
 class SCULPTKIT_OT_workflow_retopo(Operator):
