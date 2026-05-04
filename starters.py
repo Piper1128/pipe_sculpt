@@ -18,6 +18,34 @@ def _add_sphere(radius, location, scale=(1.0, 1.0, 1.0), segments=32, rings=16):
     return obj
 
 
+def _add_quad_sphere(radius, location, scale=(1.0, 1.0, 1.0), subdivisions=4):
+    """Cube-based quad sphere — uniform quad topology, no poles.
+
+    Built by subdividing a cube N times then projecting verts to a sphere.
+    The standard sculpting base mesh: brushes behave evenly across the entire
+    surface, no pole-pinching, multires subdivides cleanly.
+
+    subdivisions=4 gives 1536 faces / 1538 verts; level-1 subsurf in _finalize
+    raises that to ~6144 faces — enough to sculpt a head on.
+    """
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=location)
+    obj = bpy.context.active_object
+
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    for _ in range(subdivisions):
+        bpy.ops.mesh.subdivide()
+    bpy.ops.transform.tosphere(value=1.0)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Empirically, transform.tosphere(1.0) on a 4x-subdivided cube of size 2
+    # produces radius ~1.28 (uses average distance, not max corner radius).
+    # Scale so the user's `radius` parameter reflects actual world size.
+    s = radius / 1.28
+    obj.scale = (s * scale[0], s * scale[1], s * scale[2])
+    return obj
+
+
 def _join(active, *others):
     bpy.ops.object.select_all(action='DESELECT')
     active.select_set(True)
@@ -27,41 +55,42 @@ def _join(active, *others):
     bpy.ops.object.join()
 
 
-def _finalize(obj, name):
+def _finalize(obj, name, subsurf_levels=1):
     obj.name = name
     obj.data.name = name
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     bpy.ops.object.shade_smooth()
-    mod = obj.modifiers.new("Subsurf", 'SUBSURF')
-    mod.levels = 1
+    if subsurf_levels > 0:
+        mod = obj.modifiers.new("Subsurf", 'SUBSURF')
+        mod.levels = subsurf_levels
 
 
 class SCULPTKIT_OT_starter_sphere(Operator):
     bl_idname = "sculpt_kit.starter_sphere"
     bl_label = "Sphere"
-    bl_description = "Add a subdivided UV sphere — universal block-out starter"
+    bl_description = "Add a quad-sphere (cube + tosphere) — uniform topology, no poles, ideal for sculpting"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         _enter_object_mode(context)
         loc = context.scene.cursor.location.copy()
-        obj = _add_sphere(1.0, loc)
-        _finalize(obj, "SculptKit_Sphere")
+        obj = _add_quad_sphere(1.0, loc)
+        _finalize(obj, "SculptKit_Sphere", subsurf_levels=0)
         return {'FINISHED'}
 
 
 class SCULPTKIT_OT_starter_head(Operator):
     bl_idname = "sculpt_kit.starter_head"
     bl_label = "Head"
-    bl_description = "Add an egg-shaped block ready for face sculpting"
+    bl_description = "Add an egg-shaped quad-sphere ready for face sculpting (no UV-sphere poles)"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         _enter_object_mode(context)
         loc = context.scene.cursor.location.copy()
-        obj = _add_sphere(1.0, loc, scale=(0.85, 0.95, 1.1))
-        _finalize(obj, "SculptKit_Head")
+        obj = _add_quad_sphere(1.0, loc, scale=(0.85, 0.95, 1.1))
+        _finalize(obj, "SculptKit_Head", subsurf_levels=0)
         return {'FINISHED'}
 
 
