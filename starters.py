@@ -167,45 +167,32 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
             rigging.tag_primitive(toes, f"toes.{suffix}")
             parts.extend([thigh, shin, foot, toes])
 
-        # ========== ANATOMICAL LANDMARKS ==========
-        # Subtle bumps that protrude only ~1 voxel beyond the parent surface,
-        # so they read as smooth muscle hints — not as distinct primitive plates.
-        # Sternum + navel are skipped intentionally; at the new fine voxel scale
-        # they showed as clearly-defined primitives, which sculptors prefer to
-        # add manually.
-
+        # ========== JOINT LANDMARKS ==========
+        # Only landmarks tagged with a DIFFERENT bone than their parent torso /
+        # pelvis remain — they actually contribute to rig deformation. Pec and
+        # hip-bump primitives were tagged "spine"/"pelvis" (same as parent), so
+        # removing them costs nothing rig-wise but eliminates the breast-shaped
+        # bumps on the chest at fine voxel sizes.
         for side, suffix in ((1, "L"), (-1, "R")):
-            # Pectoral major hint — pushed deep into torso so only ~1 cm protrudes.
-            pec = _add_sphere(
-                0.05, (cx + side * 0.13, cy + 0.18, cz + 0.30), scale=(1.8, 0.25, 1.0)
-            )
-            rigging.tag_primitive(pec, "spine")
-
-            # Iliac crest — subtle hip-bone bump on pelvis.
-            hip_bump = _add_sphere(
-                0.040, (cx + side * 0.18, cy + 0.07, cz - 0.10), scale=(1.0, 1.0, 1.0)
-            )
-            rigging.tag_primitive(hip_bump, "pelvis")
-
-            # Deltoid (shoulder cap) — slimmed to read as muscle, not pad
+            # Deltoid (shoulder cap) — tagged upper_arm.L/R (own bone)
             deltoid = _add_sphere(
                 0.07, (cx + side * 0.30, cy, cz + 0.43), scale=(1.0, 1.1, 0.7)
             )
             rigging.tag_primitive(deltoid, f"upper_arm.{suffix}")
 
-            # Kneecap (patella)
+            # Kneecap (patella) — tagged lower_leg.L/R, anatomical knee bump
             kneecap = _add_sphere(
                 0.05, (cx + side * 0.11, cy + 0.10, cz - 0.62), scale=(1.0, 0.6, 1.2)
             )
             rigging.tag_primitive(kneecap, f"lower_leg.{suffix}")
 
-            # Calf muscle (gastrocnemius) — bumps on back of lower leg
+            # Calf muscle (gastrocnemius) — back of lower leg
             calf = _add_sphere(
                 0.06, (cx + side * 0.11, cy - 0.08, cz - 0.85), scale=(1.0, 1.0, 1.5)
             )
             rigging.tag_primitive(calf, f"lower_leg.{suffix}")
 
-            parts.extend([pec, hip_bump, deltoid, kneecap, calf])
+            parts.extend([deltoid, kneecap, calf])
 
         # ========== FINGERS ==========
         # 5 fingers x 3 phalanges per hand = 30 finger primitives.
