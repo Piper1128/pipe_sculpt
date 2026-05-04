@@ -66,6 +66,13 @@ class SCULPTKIT_OT_workflow_start(Operator):
             except RuntimeError as e:
                 self.report({'WARNING'}, f"Initial voxel remesh failed: {e}")
 
+        # Voxel remesh has baked the starter's subsurf-smoothed shape into mesh
+        # data. A leftover Subsurf modifier would double-detail the sculpt base
+        # and inflate Add Detail multires levels.
+        for m in list(obj.modifiers):
+            if m.type == 'SUBSURF':
+                obj.modifiers.remove(m)
+
         self.report(
             {'INFO'},
             f"Started '{preset.label}' sculpt — voxel {voxel_size:.4f}m, symmetry "
@@ -184,12 +191,16 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
         retopo = context.active_object
         retopo.name = f"{obj.name}_retopo"
 
+        # Apply Multires (preserves sculpt detail), drop Subsurf (would otherwise
+        # sit on top of the new low-poly and double its visible polycount).
         for m in list(retopo.modifiers):
             if m.type == 'MULTIRES':
                 try:
                     bpy.ops.object.modifier_apply(modifier=m.name)
                 except RuntimeError:
                     retopo.modifiers.remove(m)
+            elif m.type == 'SUBSURF':
+                retopo.modifiers.remove(m)
 
         use_sym = preset.use_symmetry_x or preset.use_symmetry_y or preset.use_symmetry_z
 
@@ -203,6 +214,13 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
         else:
             ok, err = self._quadriflow_retopo(context, retopo, target_faces, use_sym)
         if not ok:
+            # Clean up the orphaned duplicate so a re-run doesn't accumulate '_retopo.001's
+            retopo_data = retopo.data
+            bpy.data.objects.remove(retopo, do_unlink=True)
+            if retopo_data.users == 0:
+                bpy.data.meshes.remove(retopo_data, do_unlink=True)
+            context.view_layer.objects.active = obj
+            obj.select_set(True)
             self.report({'ERROR'}, err or "Retopo failed")
             return {'CANCELLED'}
 
