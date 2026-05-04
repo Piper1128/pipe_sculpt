@@ -375,6 +375,11 @@ class SCULPTKIT_OT_generate_rig(Operator):
             eb.head = b["head"]
             eb.tail = b["tail"]
             eb.use_deform = (b["kind"] == 'D')
+            # _calc_pole_angle uses base_bone.matrix_local.to_3x3().col[0] as
+            # the reference axis. Roll defaults to whatever Blender computes
+            # from bone orientation, which is platform-stable but unintuitive.
+            # Pin roll=0 so the X-axis is predictable and IK pole math is too.
+            eb.roll = 0.0
             bones_by_id[b["id"]] = eb
 
         for b in bone_data:
