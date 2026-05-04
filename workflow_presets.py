@@ -18,7 +18,9 @@ PRESETS: tuple[Preset, ...] = (
     Preset(
         id='CHARACTER',
         label='Character',
-        voxel_size_factor=0.025,
+        # 0.010 = ~2.4 cm voxel on a 2.4 m humanoid; fine enough for fingers
+        # and face features to survive remesh (was 0.025 = 6 cm, too coarse).
+        voxel_size_factor=0.010,
         use_symmetry_x=True,
         use_symmetry_y=False,
         use_symmetry_z=False,
