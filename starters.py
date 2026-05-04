@@ -176,31 +176,22 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
             parts.extend([thigh, shin, foot, toes])
 
         # ========== ANATOMICAL LANDMARKS ==========
-        # Small bumps proud of parent surface that voxel remesh fuses smoothly.
-        # All landmarks tagged with EXISTING deform bones — no new bones added.
-        # Forward axis is +Y (front of body); positive landmarks proud at front.
-
-        # Sternum (chest centerline ridge)
-        sternum = _add_sphere(0.05, (cx, cy + 0.21, cz + 0.30), scale=(1.6, 0.6, 2.6))
-        rigging.tag_primitive(sternum, "spine")
-        parts.append(sternum)
-
-        # Belly button (small bump at front of belly)
-        navel = _add_sphere(0.025, (cx, cy + 0.20, cz - 0.05))
-        rigging.tag_primitive(navel, "spine")
-        parts.append(navel)
+        # Subtle bumps that protrude only ~1 voxel beyond the parent surface,
+        # so they read as smooth muscle hints — not as distinct primitive plates.
+        # Sternum + navel are skipped intentionally; at the new fine voxel scale
+        # they showed as clearly-defined primitives, which sculptors prefer to
+        # add manually.
 
         for side, suffix in ((1, "L"), (-1, "R")):
-            # Pectoral major — flat broad slab from sternum to humerus.
-            # Wide + short Y so it reads as a muscle plate, not a breast.
+            # Pectoral major hint — pushed deep into torso so only ~1 cm protrudes.
             pec = _add_sphere(
-                0.065, (cx + side * 0.13, cy + 0.20, cz + 0.30), scale=(1.9, 0.45, 1.1)
+                0.05, (cx + side * 0.13, cy + 0.18, cz + 0.30), scale=(1.8, 0.25, 1.0)
             )
             rigging.tag_primitive(pec, "spine")
 
-            # Iliac crest (hip bone)
+            # Iliac crest — subtle hip-bone bump on pelvis.
             hip_bump = _add_sphere(
-                0.05, (cx + side * 0.20, cy + 0.10, cz - 0.10), scale=(1.2, 1.0, 1.0)
+                0.040, (cx + side * 0.18, cy + 0.07, cz - 0.10), scale=(1.0, 1.0, 1.0)
             )
             rigging.tag_primitive(hip_bump, "pelvis")
 
