@@ -26,7 +26,7 @@ class SCULPTKIT_PT_workflow(Panel):
         col.operator("sculpt_kit.workflow_start", icon='SCULPTMODE_HLT')
         col.operator("sculpt_kit.workflow_add_detail", icon='MOD_MULTIRES')
         col.operator("sculpt_kit.workflow_retopo", icon='MOD_REMESH')
-        col.operator("sculpt_kit.workflow_bake", icon='RENDER_STILL')
+        col.operator("sculpt_kit.bake_maps", icon='RENDER_STILL')
 
         layout.separator()
         col = layout.column(align=True)
