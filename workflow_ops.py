@@ -51,6 +51,8 @@ class SCULPTKIT_OT_workflow_start(Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
 
         voxel_size = _max_bbox_dim(obj) * preset.voxel_size_factor
+        if preset.max_voxel_size is not None:
+            voxel_size = min(voxel_size, preset.max_voxel_size)
         obj.data.remesh_voxel_size = voxel_size
 
         bpy.ops.object.mode_set(mode='SCULPT')

@@ -30,16 +30,23 @@ class SCULPTKIT_OT_activate_brush(Operator):
         if not self.asset_name:
             self.report({'WARNING'}, "No brush asset name provided")
             return {'CANCELLED'}
-        try:
-            bpy.ops.brush.asset_activate(
-                asset_library_type=prefs_mod.ESSENTIALS_LIB,
-                asset_library_identifier="",
-                relative_asset_identifier=prefs_mod.brush_asset_id(self.asset_name),
-            )
-        except RuntimeError as e:
-            self.report({'WARNING'}, f"Brush '{self.asset_name}' not found: {e}")
-            return {'CANCELLED'}
-        return {'FINISHED'}
+        # Try ESSENTIALS first (the bundled sculpt brushes in current Blender),
+        # then fall back to ALL so a user who has the brushes in a custom
+        # library still gets the pie working without editing slot names.
+        last_err = None
+        for lib_type in (prefs_mod.ESSENTIALS_LIB, 'ALL'):
+            try:
+                bpy.ops.brush.asset_activate(
+                    asset_library_type=lib_type,
+                    asset_library_identifier="",
+                    relative_asset_identifier=prefs_mod.brush_asset_id(self.asset_name),
+                )
+                return {'FINISHED'}
+            except RuntimeError as e:
+                last_err = e
+                continue
+        self.report({'WARNING'}, f"Brush '{self.asset_name}' not found: {last_err}")
+        return {'CANCELLED'}
 
 
 def _draw_pie(layout, slots):

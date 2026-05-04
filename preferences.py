@@ -195,12 +195,15 @@ def _rebuild_slots(prefs):
 
 
 def _ensure_slots(prefs):
-    needs_rebuild = (
-        prefs.defaults_version < CURRENT_DEFAULTS_VERSION
-        or len(prefs.primary_slots) != len(PRIMARY_DEFAULTS)
+    # Only seed slots when the user has none yet (first install) or when slot
+    # counts diverge from the defaults (impossible to render the pies). A
+    # version bump alone must NOT wipe a user's customised slot names — they
+    # can opt in via the explicit "Reset to Defaults" button in preferences.
+    needs_initial_seed = (
+        len(prefs.primary_slots) != len(PRIMARY_DEFAULTS)
         or len(prefs.secondary_slots) != len(SECONDARY_DEFAULTS)
     )
-    if needs_rebuild:
+    if needs_initial_seed:
         _rebuild_slots(prefs)
 
 
