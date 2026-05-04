@@ -34,6 +34,12 @@ class SCULPTKIT_PT_workflow(Panel):
         col.label(text="Genesis-Tracked Rigging", icon='ARMATURE_DATA')
         col.operator("sculpt_kit.generate_rig", icon='OUTLINER_OB_ARMATURE')
 
+        layout.separator()
+        col = layout.column(align=True)
+        col.scale_y = 1.4
+        col.label(text="Export", icon='EXPORT')
+        col.operator("sculpt_kit.export_unity_fbx", icon='OUTLINER_OB_MESH')
+
 
 _classes = (SCULPTKIT_PT_workflow,)
 
