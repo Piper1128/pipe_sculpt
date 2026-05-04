@@ -98,7 +98,7 @@ DEFORM_BONE_NAMES: tuple[str, ...] = (
     "lower_leg.R",
     "foot.R",
     "toes.R",
-) + _generate_finger_bone_names()
+) + _generate_finger_bone_names() + ("jaw", "ear.L", "ear.R")
 BONE_NAME_TO_INDEX = {n: i for i, n in enumerate(DEFORM_BONE_NAMES)}
 
 
@@ -150,7 +150,12 @@ HUMANOID_BONES: tuple = (
     ("knee_pole.L",  "root", (0.11,  0.30, -0.650), (0.11,  0.40, -0.650), 'C'),
     ("foot_ik.R",    "root", (-0.11, 0.00, -1.050), (-0.11, 0.20, -1.100), 'C'),
     ("knee_pole.R",  "root", (-0.11, 0.30, -0.650), (-0.11, 0.40, -0.650), 'C'),
-) + _FINGER_BONES_DATA
+) + _FINGER_BONES_DATA + (
+    # Face bones (children of head)
+    ("jaw",   "head", (0.00,  0.05, 0.625), (0.00,  0.13, 0.560), 'D'),
+    ("ear.L", "head", (0.135, -0.02, 0.78), (0.165, -0.02, 0.78), 'D'),
+    ("ear.R", "head", (-0.135, -0.02, 0.78), (-0.165, -0.02, 0.78), 'D'),
+)
 
 
 # IK constraints: (driven_bone, target_bone, pole_bone, chain_count)

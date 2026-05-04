@@ -94,8 +94,22 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
         _enter_object_mode(context)
         cx, cy, cz = context.scene.cursor.location
 
-        head = _add_sphere(0.16, (cx, cy, cz + 0.78), scale=(0.85, 0.95, 1.10))
-        rigging.tag_primitive(head, "head")
+        # Facial cluster — replaces a single head sphere with anatomical primitives
+        cranium = _add_sphere(0.14, (cx, cy, cz + 0.84), scale=(0.85, 0.95, 1.0))
+        rigging.tag_primitive(cranium, "head")
+        jaw_mass = _add_sphere(
+            0.09, (cx, cy + 0.04, cz + 0.66), scale=(0.85, 1.15, 0.75)
+        )
+        rigging.tag_primitive(jaw_mass, "jaw")
+        brow_ridge = _add_sphere(
+            0.045, (cx, cy + 0.13, cz + 0.79), scale=(2.2, 0.8, 0.5)
+        )
+        rigging.tag_primitive(brow_ridge, "head")
+        nose = _add_sphere(
+            0.025, (cx, cy + 0.16, cz + 0.74), scale=(1.1, 1.6, 1.6)
+        )
+        rigging.tag_primitive(nose, "head")
+
         neck = _add_sphere(0.075, (cx, cy, cz + 0.55))
         rigging.tag_primitive(neck, "neck")
         torso = _add_sphere(0.275, (cx, cy, cz + 0.20), scale=(1.10, 0.70, 1.40))
@@ -103,7 +117,21 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
         pelvis = _add_sphere(0.21, (cx, cy, cz - 0.25), scale=(1.05, 0.85, 0.80))
         rigging.tag_primitive(pelvis, "pelvis")
 
-        parts = [head, neck, torso, pelvis]
+        parts = [cranium, jaw_mass, brow_ridge, nose, neck, torso, pelvis]
+
+        # Cheekbones (sided, head-tagged) and ears (sided, own bones)
+        for side, suffix in ((1, "L"), (-1, "R")):
+            cheek = _add_sphere(
+                0.04, (cx + side * 0.07, cy + 0.11, cz + 0.72),
+                scale=(1.0, 0.9, 0.7),
+            )
+            rigging.tag_primitive(cheek, "head")
+            ear = _add_sphere(
+                0.035, (cx + side * 0.135, cy - 0.02, cz + 0.78),
+                scale=(0.6, 1.2, 1.4),
+            )
+            rigging.tag_primitive(ear, f"ear.{suffix}")
+            parts.extend([cheek, ear])
 
         shoulder_z = 0.40
         for side, suffix in ((1, "L"), (-1, "R")):
