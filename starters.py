@@ -145,6 +145,60 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
             rigging.tag_primitive(toes, f"toes.{suffix}")
             parts.extend([thigh, shin, foot, toes])
 
+        # ========== ANATOMICAL LANDMARKS ==========
+        # Small bumps proud of parent surface that voxel remesh fuses smoothly.
+        # All landmarks tagged with EXISTING deform bones — no new bones added.
+        # Forward axis is +Y (front of body); positive landmarks proud at front.
+
+        # Sternum (chest centerline ridge)
+        sternum = _add_sphere(0.05, (cx, cy + 0.21, cz + 0.30), scale=(1.6, 0.6, 2.6))
+        rigging.tag_primitive(sternum, "spine")
+        parts.append(sternum)
+
+        # Belly button (small bump at front of belly)
+        navel = _add_sphere(0.025, (cx, cy + 0.20, cz - 0.05))
+        rigging.tag_primitive(navel, "spine")
+        parts.append(navel)
+
+        for side, suffix in ((1, "L"), (-1, "R")):
+            # Pectoral muscle bump
+            pec = _add_sphere(
+                0.07, (cx + side * 0.13, cy + 0.21, cz + 0.30), scale=(1.5, 0.7, 1.2)
+            )
+            rigging.tag_primitive(pec, "spine")
+
+            # Iliac crest (hip bone)
+            hip_bump = _add_sphere(
+                0.05, (cx + side * 0.20, cy + 0.10, cz - 0.10), scale=(1.2, 1.0, 1.0)
+            )
+            rigging.tag_primitive(hip_bump, "pelvis")
+
+            # Sternocleidomastoid (neck strap muscle)
+            scm = _add_sphere(
+                0.035, (cx + side * 0.05, cy + 0.05, cz + 0.55), scale=(1.0, 1.0, 1.6)
+            )
+            rigging.tag_primitive(scm, "neck")
+
+            # Deltoid (shoulder cap)
+            deltoid = _add_sphere(
+                0.10, (cx + side * 0.30, cy, cz + 0.45), scale=(1.0, 1.2, 0.7)
+            )
+            rigging.tag_primitive(deltoid, f"upper_arm.{suffix}")
+
+            # Kneecap (patella)
+            kneecap = _add_sphere(
+                0.05, (cx + side * 0.11, cy + 0.10, cz - 0.62), scale=(1.0, 0.6, 1.2)
+            )
+            rigging.tag_primitive(kneecap, f"lower_leg.{suffix}")
+
+            # Calf muscle (gastrocnemius) — bumps on back of lower leg
+            calf = _add_sphere(
+                0.06, (cx + side * 0.11, cy - 0.08, cz - 0.85), scale=(1.0, 1.0, 1.5)
+            )
+            rigging.tag_primitive(calf, f"lower_leg.{suffix}")
+
+            parts.extend([pec, hip_bump, scm, deltoid, kneecap, calf])
+
         _join(torso, *(p for p in parts if p is not torso))
         rigging.store_bone_metadata(torso, 'HUMANOID')
         _finalize(torso, "SculptKit_Humanoid")
