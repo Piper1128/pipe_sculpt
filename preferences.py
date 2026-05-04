@@ -11,7 +11,7 @@ def brush_asset_id(name: str) -> str:
     return f"{ESSENTIALS_BRUSH_FILE}/Brush/{name}"
 
 
-CURRENT_DEFAULTS_VERSION = 2
+CURRENT_DEFAULTS_VERSION = 3
 
 PRIMARY_DEFAULTS = (
     "Draw",
@@ -29,8 +29,8 @@ SECONDARY_DEFAULTS = (
     "Blob",
     "Snake Hook",
     "Pinch/Magnify",
-    "Scrape",
-    "Fill",
+    "Scrape/Fill",
+    "Fill/Deepen",
     "Elastic Grab",
     "Draw Sharp",
 )
