@@ -127,16 +127,18 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
             )
             rigging.tag_primitive(cheek, "head")
             ear = _add_sphere(
-                0.035, (cx + side * 0.135, cy - 0.02, cz + 0.78),
-                scale=(0.6, 1.2, 1.4),
+                0.030, (cx + side * 0.135, cy - 0.02, cz + 0.78),
+                scale=(0.5, 1.1, 1.3),
             )
             rigging.tag_primitive(ear, f"ear.{suffix}")
             parts.extend([cheek, ear])
 
         shoulder_z = 0.40
         for side, suffix in ((1, "L"), (-1, "R")):
+            # Subtle elongated bump along the bone direction so it reads as a
+            # collar-bone ridge rather than a sphere lump on the neck.
             clavicle = _add_sphere(
-                0.06, (cx + side * 0.15, cy, cz + 0.475)
+                0.040, (cx + side * 0.15, cy, cz + 0.475), scale=(1.4, 0.8, 0.6)
             )
             rigging.tag_primitive(clavicle, f"clavicle.{suffix}")
             upper_arm = _add_sphere(
@@ -189,9 +191,10 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
         parts.append(navel)
 
         for side, suffix in ((1, "L"), (-1, "R")):
-            # Pectoral muscle bump
+            # Pectoral major — flat broad slab from sternum to humerus.
+            # Wide + short Y so it reads as a muscle plate, not a breast.
             pec = _add_sphere(
-                0.07, (cx + side * 0.13, cy + 0.21, cz + 0.30), scale=(1.5, 0.7, 1.2)
+                0.065, (cx + side * 0.13, cy + 0.20, cz + 0.30), scale=(1.9, 0.45, 1.1)
             )
             rigging.tag_primitive(pec, "spine")
 
@@ -200,12 +203,6 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
                 0.05, (cx + side * 0.20, cy + 0.10, cz - 0.10), scale=(1.2, 1.0, 1.0)
             )
             rigging.tag_primitive(hip_bump, "pelvis")
-
-            # Sternocleidomastoid (neck strap muscle)
-            scm = _add_sphere(
-                0.035, (cx + side * 0.05, cy + 0.05, cz + 0.55), scale=(1.0, 1.0, 1.6)
-            )
-            rigging.tag_primitive(scm, "neck")
 
             # Deltoid (shoulder cap)
             deltoid = _add_sphere(
@@ -225,7 +222,7 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
             )
             rigging.tag_primitive(calf, f"lower_leg.{suffix}")
 
-            parts.extend([pec, hip_bump, scm, deltoid, kneecap, calf])
+            parts.extend([pec, hip_bump, deltoid, kneecap, calf])
 
         # ========== FINGERS ==========
         # 5 fingers x 3 phalanges per hand = 30 finger primitives.
