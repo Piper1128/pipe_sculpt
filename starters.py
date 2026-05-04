@@ -94,21 +94,17 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
         _enter_object_mode(context)
         cx, cy, cz = context.scene.cursor.location
 
-        # Facial cluster — replaces a single head sphere with anatomical primitives
+        # Head — kept simple: cranium + jaw mass, with sub-voxel ear anchors
+        # so the ear bones still get vertex weights without producing visible
+        # ear-shaped bumps. Nose, brow, cheekbones removed: at fine voxel they
+        # showed as discrete primitives ("doll-face artefacts") rather than
+        # natural face features. Sculptor adds these manually.
         cranium = _add_sphere(0.14, (cx, cy, cz + 0.84), scale=(0.85, 0.95, 1.0))
         rigging.tag_primitive(cranium, "head")
         jaw_mass = _add_sphere(
             0.09, (cx, cy + 0.04, cz + 0.66), scale=(0.85, 1.15, 0.75)
         )
         rigging.tag_primitive(jaw_mass, "jaw")
-        brow_ridge = _add_sphere(
-            0.045, (cx, cy + 0.13, cz + 0.79), scale=(2.2, 0.8, 0.5)
-        )
-        rigging.tag_primitive(brow_ridge, "head")
-        nose = _add_sphere(
-            0.025, (cx, cy + 0.16, cz + 0.74), scale=(1.1, 1.6, 1.6)
-        )
-        rigging.tag_primitive(nose, "head")
 
         neck = _add_sphere(0.075, (cx, cy, cz + 0.55))
         rigging.tag_primitive(neck, "neck")
@@ -117,21 +113,17 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
         pelvis = _add_sphere(0.21, (cx, cy, cz - 0.25), scale=(1.05, 0.85, 0.80))
         rigging.tag_primitive(pelvis, "pelvis")
 
-        parts = [cranium, jaw_mass, brow_ridge, nose, neck, torso, pelvis]
+        parts = [cranium, jaw_mass, neck, torso, pelvis]
 
-        # Cheekbones (sided, head-tagged) and ears (sided, own bones)
+        # Sub-voxel ear anchors — invisible bumps that exist only to give the
+        # ear.L/.R bones vertex-group weights. User sculpts the actual ears.
         for side, suffix in ((1, "L"), (-1, "R")):
-            cheek = _add_sphere(
-                0.04, (cx + side * 0.07, cy + 0.11, cz + 0.72),
-                scale=(1.0, 0.9, 0.7),
-            )
-            rigging.tag_primitive(cheek, "head")
             ear = _add_sphere(
-                0.030, (cx + side * 0.135, cy - 0.02, cz + 0.78),
-                scale=(0.5, 1.1, 1.3),
+                0.018, (cx + side * 0.118, cy - 0.02, cz + 0.78),
+                scale=(0.8, 1.0, 1.0),
             )
             rigging.tag_primitive(ear, f"ear.{suffix}")
-            parts.extend([cheek, ear])
+            parts.append(ear)
 
         shoulder_z = 0.40
         for side, suffix in ((1, "L"), (-1, "R")):
@@ -195,9 +187,9 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
             )
             rigging.tag_primitive(hip_bump, "pelvis")
 
-            # Deltoid (shoulder cap)
+            # Deltoid (shoulder cap) — slimmed to read as muscle, not pad
             deltoid = _add_sphere(
-                0.10, (cx + side * 0.30, cy, cz + 0.45), scale=(1.0, 1.2, 0.7)
+                0.07, (cx + side * 0.30, cy, cz + 0.43), scale=(1.0, 1.1, 0.7)
             )
             rigging.tag_primitive(deltoid, f"upper_arm.{suffix}")
 
