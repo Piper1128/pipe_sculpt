@@ -73,9 +73,9 @@ class SCULPTKIT_OT_starter_bust(Operator):
         _enter_object_mode(context)
         cx, cy, cz = context.scene.cursor.location
 
-        head = _add_sphere(0.50, (cx, cy, cz + 1.50), scale=(0.85, 0.95, 1.10))
-        neck = _add_sphere(0.25, (cx, cy, cz + 0.90))
-        shoulders = _add_sphere(0.60, (cx, cy, cz + 0.40), scale=(2.00, 0.70, 0.60))
+        head = _add_sphere(0.18, (cx, cy, cz + 0.78), scale=(0.85, 0.95, 1.10))
+        neck = _add_sphere(0.07, (cx, cy, cz + 0.52))
+        shoulders = _add_sphere(0.32, (cx, cy, cz + 0.10), scale=(1.60, 1.00, 0.80))
 
         _join(head, neck, shoulders)
         _finalize(head, "SculptKit_Bust")
@@ -93,34 +93,39 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
         cx, cy, cz = context.scene.cursor.location
 
         head = _add_sphere(0.16, (cx, cy, cz + 0.78), scale=(0.85, 0.95, 1.10))
-        neck = _add_sphere(0.075, (cx, cy, cz + 0.59))
-        torso = _add_sphere(0.275, (cx, cy, cz + 0.28), scale=(1.10, 0.70, 1.40))
-        pelvis = _add_sphere(0.21, (cx, cy, cz - 0.18), scale=(1.05, 0.85, 0.80))
+        neck = _add_sphere(0.075, (cx, cy, cz + 0.55))
+        torso = _add_sphere(0.275, (cx, cy, cz + 0.20), scale=(1.10, 0.70, 1.40))
+        pelvis = _add_sphere(0.21, (cx, cy, cz - 0.25), scale=(1.05, 0.85, 0.80))
 
-        l_upper_arm = _add_sphere(0.075, (cx + 0.32, cy, cz + 0.35), scale=(1.0, 1.0, 2.5))
-        r_upper_arm = _add_sphere(0.075, (cx - 0.32, cy, cz + 0.35), scale=(1.0, 1.0, 2.5))
-        l_forearm = _add_sphere(0.065, (cx + 0.32, cy, cz - 0.025), scale=(1.0, 1.0, 2.2))
-        r_forearm = _add_sphere(0.065, (cx - 0.32, cy, cz - 0.025), scale=(1.0, 1.0, 2.2))
+        parts = [head, neck, torso, pelvis]
 
-        l_thigh = _add_sphere(0.10, (cx + 0.11, cy, cz - 0.48), scale=(1.0, 1.0, 2.3))
-        r_thigh = _add_sphere(0.10, (cx - 0.11, cy, cz - 0.48), scale=(1.0, 1.0, 2.3))
-        l_shin = _add_sphere(0.085, (cx + 0.11, cy, cz - 0.98), scale=(1.0, 1.0, 2.3))
-        r_shin = _add_sphere(0.085, (cx - 0.11, cy, cz - 0.98), scale=(1.0, 1.0, 2.3))
+        for side in (1, -1):
+            x_arm = side * 0.32
+            upper_arm = _add_sphere(
+                0.075, (cx + x_arm, cy, cz + 0.175), scale=(1.0, 1.0, 4.33)
+            )
+            forearm = _add_sphere(
+                0.065, (cx + x_arm, cy, cz - 0.325), scale=(1.0, 1.0, 4.23)
+            )
+            hand = _add_sphere(
+                0.06, (cx + x_arm, cy, cz - 0.60), scale=(1.0, 0.5, 1.5)
+            )
+            parts.extend([upper_arm, forearm, hand])
 
-        _join(
-            torso,
-            head,
-            neck,
-            pelvis,
-            l_upper_arm,
-            r_upper_arm,
-            l_forearm,
-            r_forearm,
-            l_thigh,
-            r_thigh,
-            l_shin,
-            r_shin,
-        )
+        for side in (1, -1):
+            x_leg = side * 0.11
+            thigh = _add_sphere(
+                0.10, (cx + x_leg, cy, cz - 0.40), scale=(1.0, 1.0, 3.5)
+            )
+            shin = _add_sphere(
+                0.085, (cx + x_leg, cy, cz - 0.875), scale=(1.0, 1.0, 2.88)
+            )
+            foot = _add_sphere(
+                0.075, (cx + x_leg, cy + 0.08, cz - 1.10), scale=(0.85, 1.8, 0.6)
+            )
+            parts.extend([thigh, shin, foot])
+
+        _join(torso, *(p for p in parts if p is not torso))
         _finalize(torso, "SculptKit_Humanoid")
         return {'FINISHED'}
 
