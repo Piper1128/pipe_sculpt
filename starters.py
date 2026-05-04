@@ -199,6 +199,27 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
 
             parts.extend([pec, hip_bump, scm, deltoid, kneecap, calf])
 
+        # ========== FINGERS ==========
+        # 5 fingers x 3 phalanges per hand = 30 finger primitives.
+        # Each phalanx is a small sphere tagged with its own bone for individual
+        # finger animation. They overlap so voxel remesh fuses fingers + hand
+        # into one continuous mesh.
+        for suffix, side in (("L", 1), ("R", -1)):
+            for finger, y in rigging.FINGER_Y_OFFSETS.items():
+                for i in range(1, 4):
+                    cx_x = side * (
+                        rigging.FINGER_KNUCKLE_X
+                        + (i - 0.5) * rigging.FINGER_PHALANX_LENGTH
+                    )
+                    # Uniform radius so every phalanx survives voxel remesh
+                    phalanx = _add_sphere(
+                        0.022, (cx + cx_x, cy + y, cz + 0.40)
+                    )
+                    rigging.tag_primitive(
+                        phalanx, rigging._finger_bone_name(finger, i, suffix)
+                    )
+                    parts.append(phalanx)
+
         _join(torso, *(p for p in parts if p is not torso))
         rigging.store_bone_metadata(torso, 'HUMANOID')
         _finalize(torso, "SculptKit_Humanoid")

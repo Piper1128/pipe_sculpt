@@ -19,6 +19,61 @@ META_PROP = "sculpt_kit_bone_data"
 RIG_TYPE_PROP = "sculpt_kit_rig_type"
 
 
+FINGER_NAMES: tuple[str, ...] = ("thumb", "index", "middle", "ring", "pinky")
+# Y spacing increased to 30 mm between adjacent fingers so each phalanx
+# remains distinct after voxel remesh at 25 mm voxel size.
+FINGER_Y_OFFSETS = {
+    "pinky":  -0.06,
+    "ring":   -0.03,
+    "middle":  0.00,
+    "index":   0.03,
+    "thumb":   0.06,
+}
+FINGER_PHALANX_LENGTH = 0.035  # 3.5 cm per phalanx; 10.5 cm total finger
+FINGER_KNUCKLE_X = 1.20         # x where fingers begin (shared with hand bone tail)
+
+
+def _finger_bone_name(finger: str, idx: int, suffix: str) -> str:
+    """e.g. ('thumb', 1, 'L') -> 'thumb_01.L'"""
+    return f"{finger}_{idx:02d}.{suffix}"
+
+
+def _generate_finger_bone_names() -> tuple[str, ...]:
+    out = []
+    for suffix in ("L", "R"):
+        for finger in FINGER_NAMES:
+            for i in range(1, 4):
+                out.append(_finger_bone_name(finger, i, suffix))
+    return tuple(out)
+
+
+def _generate_finger_bones() -> tuple:
+    """Generate (id, parent, head, tail, kind) tuples for all 30 finger bones.
+
+    Each finger has 3 phalanges chained from the hand bone. Phalanges connect
+    head-to-tail so the chain rotates naturally for grip animation.
+    """
+    out = []
+    for suffix, side in (("L", 1), ("R", -1)):
+        for finger in FINGER_NAMES:
+            y = FINGER_Y_OFFSETS[finger]
+            for i in range(1, 4):
+                head_x = side * (FINGER_KNUCKLE_X + (i - 1) * FINGER_PHALANX_LENGTH)
+                tail_x = side * (FINGER_KNUCKLE_X + i * FINGER_PHALANX_LENGTH)
+                head = (head_x, y, 0.40)
+                tail = (tail_x, y, 0.40)
+                if i == 1:
+                    parent = f"hand.{suffix}"
+                else:
+                    parent = _finger_bone_name(finger, i - 1, suffix)
+                bone_id = _finger_bone_name(finger, i, suffix)
+                out.append((bone_id, parent, head, tail, 'D'))
+    return tuple(out)
+
+
+_FINGER_BONES_DATA = _generate_finger_bones()
+
+
 # Deform bones — these get per-vertex weights via the bone-id attribute.
 # Order is the canonical bone-index ordering; do not reorder without bumping
 # the metadata schema.
@@ -43,7 +98,7 @@ DEFORM_BONE_NAMES: tuple[str, ...] = (
     "lower_leg.R",
     "foot.R",
     "toes.R",
-)
+) + _generate_finger_bone_names()
 BONE_NAME_TO_INDEX = {n: i for i, n in enumerate(DEFORM_BONE_NAMES)}
 
 
@@ -95,7 +150,7 @@ HUMANOID_BONES: tuple = (
     ("knee_pole.L",  "root", (0.11,  0.30, -0.650), (0.11,  0.40, -0.650), 'C'),
     ("foot_ik.R",    "root", (-0.11, 0.00, -1.050), (-0.11, 0.20, -1.100), 'C'),
     ("knee_pole.R",  "root", (-0.11, 0.30, -0.650), (-0.11, 0.40, -0.650), 'C'),
-)
+) + _FINGER_BONES_DATA
 
 
 # IK constraints: (driven_bone, target_bone, pole_bone, chain_count)
