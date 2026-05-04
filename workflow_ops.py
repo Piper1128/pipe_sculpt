@@ -152,6 +152,11 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
 
         use_sym = preset.use_symmetry_x or preset.use_symmetry_y or preset.use_symmetry_z
 
+        # Snapshot high-poly bone tags before quadriflow destroys the duplicate's
+        # attribute. We restore via KDTree once the new mesh is built (GTR Ph3).
+        gtr_source = obj  # original high-poly is the bone-tag source
+        had_tags = rigging.VERTEX_ATTR in gtr_source.data.attributes
+
         try:
             bpy.ops.object.quadriflow_remesh(
                 target_faces=target_faces,
@@ -165,10 +170,16 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
             self.report({'ERROR'}, f"Quadriflow failed: {e}")
             return {'CANCELLED'}
 
+        if had_tags:
+            transferred = rigging.transfer_bone_tags_from_high(gtr_source, retopo)
+            tag_msg = "GTR tags preserved" if transferred else "GTR transfer skipped"
+        else:
+            tag_msg = "no GTR tags"
+
         obj.hide_set(True)
         self.report(
             {'INFO'},
-            f"Retopo'd '{obj.name}' → '{retopo.name}' ({target_faces} faces, sym={use_sym})",
+            f"Retopo'd '{obj.name}' → '{retopo.name}' ({target_faces} faces, sym={use_sym}, {tag_msg})",
         )
         return {'FINISHED'}
 

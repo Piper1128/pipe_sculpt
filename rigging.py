@@ -287,6 +287,41 @@ def smart_voxel_remesh(obj) -> bool:
     return True
 
 
+def transfer_bone_tags_from_high(high_obj, low_obj) -> bool:
+    """Copy the per-vertex bone-id attribute from high_obj to low_obj via KDTree.
+
+    Used after retopology (Quadriflow / Decimate) so the new low-poly mesh inherits
+    the high-poly's tags, allowing Generate Rig to skin the low-poly directly.
+    Both objects must be in the same world frame (same matrix_world).
+
+    Returns True on success.
+    """
+    src_attr = high_obj.data.attributes.get(VERTEX_ATTR)
+    if src_attr is None:
+        return False
+
+    high_verts = high_obj.data.vertices
+    kd = mathutils.kdtree.KDTree(len(high_verts))
+    for i, v in enumerate(high_verts):
+        kd.insert(v.co, i)
+    kd.balance()
+
+    low_attrs = low_obj.data.attributes
+    if VERTEX_ATTR in low_attrs:
+        low_attrs.remove(low_attrs[VERTEX_ATTR])
+    new_attr = low_attrs.new(name=VERTEX_ATTR, type='INT', domain='POINT')
+    for i, v in enumerate(low_obj.data.vertices):
+        _, src_idx, _ = kd.find(v.co)
+        new_attr.data[i].value = src_attr.data[src_idx].value
+
+    # Copy the JSON metadata too so Generate Rig can read bone hierarchy
+    if META_PROP in high_obj:
+        low_obj[META_PROP] = high_obj[META_PROP]
+    if RIG_TYPE_PROP in high_obj:
+        low_obj[RIG_TYPE_PROP] = high_obj[RIG_TYPE_PROP]
+    return True
+
+
 class SCULPTKIT_OT_generate_rig(Operator):
     bl_idname = "sculpt_kit.generate_rig"
     bl_label = "Generate Rig"
