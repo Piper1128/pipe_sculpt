@@ -1,11 +1,13 @@
 """Multi-map baking — produces a Substance Painter / Unity-ready map set in one pass.
 
 Industry-standard map set:
-  - normal (tangent space, OpenGL Y+, MikkTSpace)
+  - normal (tangent space, OpenGL Y+, MikkTSpace, R=+X G=+Y B=+Z)
   - ambient occlusion
-  - cavity (signed curvature concavity)
-  - curvature (full bidirectional curvature for masks)
   - position (worldspace XYZ for masking by location)
+
+Curvature is intentionally not baked here: Cycles has no native curvature pass,
+and Substance Painter generates a higher-quality curvature map from the baked
+normal client-side. Adding a fake curvature pass produced misleading output.
 
 Each pass routes to its own image; the user gets <name>_normal, <name>_ao, etc.
 Saved to disk next to the .blend file when the file is saved, packed otherwise.
@@ -27,12 +29,12 @@ BAKE_RESOLUTIONS = (
 )
 
 
-# (id, suffix, cycles_bake_type, colorspace, default_color, description)
+# (id, suffix, colorspace, default_color, description)
+# The cycles bake type is derived from the id at bake time — see _bake_one_pass.
 BAKE_PASS_SPECS = (
-    ('NORMAL',     "_normal",    'NORMAL',    'Non-Color', (0.5, 0.5, 1.0, 1.0), "Tangent-space normal map"),
-    ('AO',         "_ao",        'AO',        'sRGB',      (1.0, 1.0, 1.0, 1.0), "Ambient occlusion"),
-    ('CURVATURE',  "_curvature", 'NORMAL',    'Non-Color', (0.5, 0.5, 1.0, 1.0), "Geometric curvature mask"),
-    ('POSITION',   "_position",  'POSITION',  'Non-Color', (0.0, 0.0, 0.0, 1.0), "Worldspace position"),
+    ('NORMAL',   "_normal",   'Non-Color', (0.5, 0.5, 1.0, 1.0), "Tangent-space normal map"),
+    ('AO',       "_ao",       'sRGB',      (1.0, 1.0, 1.0, 1.0), "Ambient occlusion"),
+    ('POSITION', "_position", 'Non-Color', (0.0, 0.0, 0.0, 1.0), "Worldspace position"),
 )
 
 
@@ -166,7 +168,7 @@ class SCULPTKIT_OT_bake_maps(Operator):
     bl_idname = "sculpt_kit.bake_maps"
     bl_label = "Bake Maps"
     bl_description = (
-        "Bake normal + AO + curvature + position maps from the high-poly source to "
+        "Bake normal + AO (+ optional position) maps from the high-poly source to "
         "the active low-poly mesh. Auto-pairs '<name>_retopo' with '<name>'"
     )
     bl_options = {'REGISTER', 'UNDO'}
@@ -178,7 +180,6 @@ class SCULPTKIT_OT_bake_maps(Operator):
     )
     bake_normal: BoolProperty(name="Normal", default=True)
     bake_ao: BoolProperty(name="Ambient Occlusion", default=True)
-    bake_curvature: BoolProperty(name="Curvature", default=True)
     bake_position: BoolProperty(name="Position", default=False)
     samples_ao: IntProperty(name="AO Samples", default=64, min=8, max=512)
     save_to_disk: BoolProperty(
@@ -207,7 +208,7 @@ class SCULPTKIT_OT_bake_maps(Operator):
             self.use_cage = prefs.bake_use_cage
         return self.execute(context)
 
-    def _bake_one_pass(self, context, low, high, mat, pass_id, suffix, bake_type, colorspace, default_color, size, ray_dist, cage_ext, cage_obj):
+    def _bake_one_pass(self, context, low, high, mat, pass_id, suffix, colorspace, default_color, size, ray_dist, cage_ext, cage_obj, base_samples):
         img_name = f"{low.name}{suffix}"
         img = _get_or_create_image(img_name, size, colorspace, default_color)
         _set_active_bake_target(mat, img)
@@ -217,22 +218,25 @@ class SCULPTKIT_OT_bake_maps(Operator):
         scene.render.bake.cage_extrusion = cage_ext
         scene.render.bake.max_ray_distance = ray_dist
         scene.render.bake.use_clear = True
+        # Tangent-space normal in Mikktspace orientation — the only normal-map
+        # convention Unity 6 reads correctly without channel-flipping.
+        scene.render.bake.normal_space = 'TANGENT'
+        scene.render.bake.normal_r = 'POS_X'
+        scene.render.bake.normal_g = 'POS_Y'
+        scene.render.bake.normal_b = 'POS_Z'
         if cage_obj is not None:
             scene.render.bake.use_cage = True
             scene.render.bake.cage_object = cage_obj
         else:
             scene.render.bake.use_cage = False
             scene.render.bake.cage_object = None
+
+        # Reset samples to the base each pass so AO's high sample count doesn't
+        # leak into NORMAL/POSITION passes that come after it.
+        scene.cycles.samples = base_samples
         if pass_id == 'AO':
             scene.cycles.samples = self.samples_ao
             scene.cycles.bake_type = 'AO'
-        elif pass_id == 'CURVATURE':
-            # Curvature isn't a native Cycles pass; we use a normal-bake-derived
-            # workaround by baking against a flat shade-less material would need
-            # a temp setup. For MVP we skip curvature here and fall back to a
-            # warning. (Substance Painter does this client-side anyway.)
-            self.report({'INFO'}, "Curvature pass: stub (use Substance from baked normal). Skipping.")
-            return None
         elif pass_id == 'POSITION':
             scene.cycles.bake_type = 'POSITION'
         else:
@@ -282,7 +286,6 @@ class SCULPTKIT_OT_bake_maps(Operator):
             spec for spec in BAKE_PASS_SPECS
             if (spec[0] == 'NORMAL' and self.bake_normal)
             or (spec[0] == 'AO' and self.bake_ao)
-            or (spec[0] == 'CURVATURE' and self.bake_curvature)
             or (spec[0] == 'POSITION' and self.bake_position)
         ]
 
@@ -297,11 +300,11 @@ class SCULPTKIT_OT_bake_maps(Operator):
         high_was_hidden = _setup_selection_for_bake(context, high, low)
 
         baked = []
-        for pass_id, suffix, bake_type, colorspace, default_color, _desc in passes_to_run:
+        for pass_id, suffix, colorspace, default_color, _desc in passes_to_run:
             img = self._bake_one_pass(
                 context, low, high, mat,
-                pass_id, suffix, bake_type, colorspace, default_color,
-                size, ray_dist, cage_ext, cage_obj,
+                pass_id, suffix, colorspace, default_color,
+                size, ray_dist, cage_ext, cage_obj, prior_samples,
             )
             if img is not None:
                 baked.append((pass_id, img.name, img.filepath_raw or "(packed)"))
