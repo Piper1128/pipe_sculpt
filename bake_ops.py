@@ -90,6 +90,31 @@ def _save_image_next_to_blend(img, sub_dir="textures") -> str | None:
     return out_path
 
 
+def _build_cage_object(low_obj, extrusion: float):
+    """Duplicate low_obj and apply a Solidify-style outward offset on every vertex.
+
+    A real cage object eliminates the bake artefacts that simple cage_extrusion
+    (a uniform offset along normals at bake time) introduces on soft-curvature
+    surfaces. We do the offset by moving every vertex along its split-normal.
+    """
+    cage_data = low_obj.data.copy()
+    cage = bpy.data.objects.new(f"{low_obj.name}_bake_cage", cage_data)
+    bpy.context.collection.objects.link(cage)
+    cage.matrix_world = low_obj.matrix_world.copy()
+
+    # Compute vertex normals (data lookup), then displace
+    cage_data.calc_loop_triangles()
+    # Use polygon normals averaged per vertex
+    vert_normals = [None] * len(cage_data.vertices)
+    for v_idx in range(len(cage_data.vertices)):
+        vert_normals[v_idx] = cage_data.vertices[v_idx].normal.copy()
+    for v_idx, v in enumerate(cage_data.vertices):
+        v.co = v.co + vert_normals[v_idx] * extrusion
+
+    cage.hide_render = True
+    return cage
+
+
 def _resolve_high_poly(context, low):
     """Pair the active low-poly with a high-poly source.
 
@@ -161,13 +186,19 @@ class SCULPTKIT_OT_bake_maps(Operator):
         description="Save PNGs in <blend_dir>/textures/. Packs into .blend if no save path",
         default=True,
     )
+    use_cage: BoolProperty(
+        name="Use Cage Object",
+        description="Auto-generate a cage (low-poly + outward vertex-normal offset). "
+                    "Eliminates ray-cast artefacts on soft surfaces",
+        default=True,
+    )
 
     @classmethod
     def poll(cls, context):
         obj = context.active_object
         return obj is not None and obj.type == 'MESH'
 
-    def _bake_one_pass(self, context, low, high, mat, pass_id, suffix, bake_type, colorspace, default_color, size, ray_dist, cage_ext):
+    def _bake_one_pass(self, context, low, high, mat, pass_id, suffix, bake_type, colorspace, default_color, size, ray_dist, cage_ext, cage_obj):
         img_name = f"{low.name}{suffix}"
         img = _get_or_create_image(img_name, size, colorspace, default_color)
         _set_active_bake_target(mat, img)
@@ -177,6 +208,12 @@ class SCULPTKIT_OT_bake_maps(Operator):
         scene.render.bake.cage_extrusion = cage_ext
         scene.render.bake.max_ray_distance = ray_dist
         scene.render.bake.use_clear = True
+        if cage_obj is not None:
+            scene.render.bake.use_cage = True
+            scene.render.bake.cage_object = cage_obj
+        else:
+            scene.render.bake.use_cage = False
+            scene.render.bake.cage_object = None
         if pass_id == 'AO':
             scene.cycles.samples = self.samples_ao
             scene.cycles.bake_type = 'AO'
@@ -240,6 +277,14 @@ class SCULPTKIT_OT_bake_maps(Operator):
             or (spec[0] == 'POSITION' and self.bake_position)
         ]
 
+        cage_obj = None
+        if self.use_cage:
+            try:
+                cage_obj = _build_cage_object(low, cage_ext)
+            except Exception as e:
+                self.report({'WARNING'}, f"Cage build failed, falling back to extrusion only: {e}")
+                cage_obj = None
+
         high_was_hidden = _setup_selection_for_bake(context, high, low)
 
         baked = []
@@ -247,7 +292,7 @@ class SCULPTKIT_OT_bake_maps(Operator):
             img = self._bake_one_pass(
                 context, low, high, mat,
                 pass_id, suffix, bake_type, colorspace, default_color,
-                size, ray_dist, cage_ext,
+                size, ray_dist, cage_ext, cage_obj,
             )
             if img is not None:
                 baked.append((pass_id, img.name, img.filepath_raw or "(packed)"))
@@ -256,6 +301,10 @@ class SCULPTKIT_OT_bake_maps(Operator):
         scene.cycles.samples = prior_samples
         if high_was_hidden:
             high.hide_set(True)
+        if cage_obj is not None:
+            cage_data = cage_obj.data
+            bpy.data.objects.remove(cage_obj, do_unlink=True)
+            bpy.data.meshes.remove(cage_data, do_unlink=True)
 
         if not baked:
             self.report({'WARNING'}, "No passes baked")
