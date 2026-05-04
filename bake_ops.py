@@ -93,25 +93,29 @@ def _save_image_next_to_blend(img, sub_dir="textures") -> str | None:
 
 
 def _build_cage_object(low_obj, extrusion: float):
-    """Duplicate low_obj and apply a Solidify-style outward offset on every vertex.
+    """Duplicate low_obj and offset each vertex outward by `extrusion`.
 
-    A real cage object eliminates the bake artefacts that simple cage_extrusion
-    (a uniform offset along normals at bake time) introduces on soft-curvature
-    surfaces. We do the offset by moving every vertex along its split-normal.
+    A dedicated cage eliminates the artefacts simple cage_extrusion (a uniform
+    offset at bake time) introduces on soft-curvature surfaces. We compute the
+    displacement via bmesh so face-area-weighted vertex normals are guaranteed
+    fresh, which matters when low_obj's mesh data was just replaced (e.g. by
+    quadriflow_remesh) and `vertices[i].normal` may not yet be valid.
     """
+    import bmesh
+
     cage_data = low_obj.data.copy()
     cage = bpy.data.objects.new(f"{low_obj.name}_bake_cage", cage_data)
     bpy.context.collection.objects.link(cage)
     cage.matrix_world = low_obj.matrix_world.copy()
 
-    # Compute vertex normals (data lookup), then displace
-    cage_data.calc_loop_triangles()
-    # Use polygon normals averaged per vertex
-    vert_normals = [None] * len(cage_data.vertices)
-    for v_idx in range(len(cage_data.vertices)):
-        vert_normals[v_idx] = cage_data.vertices[v_idx].normal.copy()
-    for v_idx, v in enumerate(cage_data.vertices):
-        v.co = v.co + vert_normals[v_idx] * extrusion
+    bm = bmesh.new()
+    bm.from_mesh(cage_data)
+    bm.normal_update()
+    for v in bm.verts:
+        v.co = v.co + v.normal * extrusion
+    bm.to_mesh(cage_data)
+    bm.free()
+    cage_data.update()
 
     cage.hide_render = True
     return cage
@@ -265,6 +269,28 @@ class SCULPTKIT_OT_bake_maps(Operator):
         if high is None:
             self.report({'ERROR'}, "No high-poly source — name it '<low>_retopo' or select alongside")
             return {'CANCELLED'}
+
+        # Sanity check: high-poly must actually have more geometry than low-poly,
+        # otherwise we'd silently bake low→low and produce a flat blue normal map.
+        high_verts = len(high.data.vertices)
+        low_verts = len(low.data.vertices)
+        if high_verts <= low_verts:
+            self.report(
+                {'ERROR'},
+                f"High-poly ({high.name}, {high_verts} verts) is not denser than "
+                f"low-poly ({low.name}, {low_verts} verts) — pick the right pair",
+            )
+            return {'CANCELLED'}
+
+        # Multi-slot meshes only get bake output on faces using SculptKit_Bake_Mat;
+        # other slots receive nothing. Warn so the user can fix or accept.
+        existing_slots = [s for s in low.data.materials if s is not None]
+        if len(existing_slots) > 0:
+            self.report(
+                {'WARNING'},
+                f"'{low.name}' has {len(existing_slots)} existing material slot(s). "
+                "Bake will only write to faces using SculptKit_Bake_Mat",
+            )
 
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
