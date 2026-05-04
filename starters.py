@@ -1,6 +1,8 @@
 import bpy
 from bpy.types import Operator, Panel
 
+from . import rigging
+
 
 def _enter_object_mode(context):
     if context.mode != 'OBJECT':
@@ -93,39 +95,50 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
         cx, cy, cz = context.scene.cursor.location
 
         head = _add_sphere(0.16, (cx, cy, cz + 0.78), scale=(0.85, 0.95, 1.10))
+        rigging.tag_primitive(head, "head")
         neck = _add_sphere(0.075, (cx, cy, cz + 0.55))
+        rigging.tag_primitive(neck, "neck")
         torso = _add_sphere(0.275, (cx, cy, cz + 0.20), scale=(1.10, 0.70, 1.40))
+        rigging.tag_primitive(torso, "spine")
         pelvis = _add_sphere(0.21, (cx, cy, cz - 0.25), scale=(1.05, 0.85, 0.80))
+        rigging.tag_primitive(pelvis, "pelvis")
 
         parts = [head, neck, torso, pelvis]
 
         shoulder_z = 0.40
-        for side in (1, -1):
+        for side, prefix in ((1, "L"), (-1, "R")):
             upper_arm = _add_sphere(
                 0.075, (cx + side * 0.475, cy, cz + shoulder_z), scale=(3.67, 1.0, 1.0)
             )
+            rigging.tag_primitive(upper_arm, f"{prefix}_upper_arm")
             forearm = _add_sphere(
                 0.065, (cx + side * 0.875, cy, cz + shoulder_z), scale=(3.46, 1.0, 1.0)
             )
+            rigging.tag_primitive(forearm, f"{prefix}_forearm")
             hand = _add_sphere(
                 0.05, (cx + side * 1.10, cy, cz + shoulder_z), scale=(2.0, 1.0, 0.4)
             )
+            rigging.tag_primitive(hand, f"{prefix}_hand")
             parts.extend([upper_arm, forearm, hand])
 
-        for side in (1, -1):
+        for side, prefix in ((1, "L"), (-1, "R")):
             x_leg = side * 0.11
             thigh = _add_sphere(
                 0.10, (cx + x_leg, cy, cz - 0.40), scale=(1.0, 1.0, 3.5)
             )
+            rigging.tag_primitive(thigh, f"{prefix}_thigh")
             shin = _add_sphere(
                 0.085, (cx + x_leg, cy, cz - 0.875), scale=(1.0, 1.0, 2.88)
             )
+            rigging.tag_primitive(shin, f"{prefix}_shin")
             foot = _add_sphere(
                 0.075, (cx + x_leg, cy + 0.08, cz - 1.10), scale=(0.85, 1.8, 0.6)
             )
+            rigging.tag_primitive(foot, f"{prefix}_foot")
             parts.extend([thigh, shin, foot])
 
         _join(torso, *(p for p in parts if p is not torso))
+        rigging.store_bone_metadata(torso, 'HUMANOID')
         _finalize(torso, "SculptKit_Humanoid")
         return {'FINISHED'}
 

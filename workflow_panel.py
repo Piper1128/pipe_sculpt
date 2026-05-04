@@ -28,6 +28,12 @@ class SCULPTKIT_PT_workflow(Panel):
         col.operator("sculpt_kit.workflow_retopo", icon='MOD_REMESH')
         col.operator("sculpt_kit.workflow_bake", icon='RENDER_STILL')
 
+        layout.separator()
+        col = layout.column(align=True)
+        col.scale_y = 1.4
+        col.label(text="Genesis-Tracked Rigging", icon='ARMATURE_DATA')
+        col.operator("sculpt_kit.generate_rig", icon='OUTLINER_OB_ARMATURE')
+
 
 _classes = (SCULPTKIT_PT_workflow,)
 

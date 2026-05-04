@@ -1,6 +1,7 @@
 import bpy
 from bpy.types import Operator
 
+from . import rigging
 from . import workflow_presets as presets_mod
 
 
@@ -61,7 +62,7 @@ class SCULPTKIT_OT_workflow_start(Operator):
 
         if not bpy.app.background:
             try:
-                bpy.ops.object.voxel_remesh()
+                rigging.smart_voxel_remesh(obj)
             except RuntimeError as e:
                 self.report({'WARNING'}, f"Initial voxel remesh failed: {e}")
 
