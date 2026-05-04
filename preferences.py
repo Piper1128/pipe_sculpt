@@ -115,6 +115,20 @@ class SCULPTKIT_Preferences(AddonPreferences):
     )
 
     # Export settings
+    export_axis_mode: EnumProperty(
+        name="Axis mode",
+        description=(
+            "How Blender Z-up is converted to Unity Y-up. BAKED = bake -90° X "
+            "into mesh data, no Unity importer tweak required. DECLARED = "
+            "declare Y-up in FBX header, requires 'Bake Axis Conversion' = ON "
+            "on the Unity 6 importer"
+        ),
+        items=(
+            ('BAKED', "Baked (default Unity importer)", ""),
+            ('DECLARED', "Declared (Bake Axis Conversion ON)", ""),
+        ),
+        default='BAKED',
+    )
     export_triangulate: BoolProperty(
         name="Triangulate before export",
         description="Add a sticky Triangulate modifier so Unity does not re-triangulate post-import",
@@ -146,6 +160,7 @@ class SCULPTKIT_Preferences(AddonPreferences):
         box = layout.box()
         box.label(text="Unity FBX Export", icon='EXPORT')
         col = box.column(align=True)
+        col.prop(self, "export_axis_mode")
         col.prop(self, "export_triangulate")
         col.prop(self, "export_apply_modifiers")
 

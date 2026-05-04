@@ -1,26 +1,55 @@
 """Unity-ready FBX export.
 
-Wraps Blender's FBX exporter with the settings the Unity 6 (2026) importer
-expects:
-  - forward = -Z, up = +Y, scale = 1.0 (Blender default Z-up gets re-axed)
-  - apply transforms = True (no negative scales reaching Unity)
-  - use_armature_deform_only = True (only rig-driven bones)
+Wraps Blender's FBX exporter with settings the Unity 6 (2026) importer accepts.
+The hard part is axis conversion: Blender is Z-up, Unity is Y-up, and there
+are two valid Blender→Unity recipes that both work but require different
+Unity-side settings. We expose them as `axis_mode`:
+
+  BAKED (default):
+    bake_space_transform=True, axis_forward='-Z', axis_up='Y'
+    The -90° X rotation is baked into mesh data; FBX header still claims
+    Y-up. Unity reads the FBX as-is — no Bake Axis Conversion needed in
+    the importer. Gotcha: rotation/scale animation curves in Z-up coords
+    will not match the baked geometry, so this mode is best for static or
+    bind-pose-only exports.
+
+  DECLARED:
+    bake_space_transform=False, axis_forward='-Z', axis_up='Y'
+    Mesh data stays in Blender's Z-up; FBX header declares Y-up. Unity 6
+    must have "Bake Axis Conversion" = ON on the importer (Inspector →
+    Model → Scene). Animation curves stay numerically aligned with the
+    Blender source.
+
+Other Unity-relevant settings are constants:
+  - apply_transforms baked via use_mesh_modifiers (no negative scales)
+  - use_armature_deform_only = True (only deform bones reach Unity Humanoid)
   - mesh_smooth_type = 'FACE' (matches MikkTSpace tangent generation)
   - use_tspace = True (export tangents for normal-map shading)
-  - bake_anim = False by default (poses/anims separate)
+  - colors_type = 'SRGB' (Unity 6 color management default)
+  - bake_anim = False by default (poses/anims authored separately)
 
 Optional pre-export modifier stack:
   - Triangulate modifier (sticky, applied) so Unity doesn't re-triangulate
-    against the bake's triangulation, which would produce normal-map seams
+    against the bake's triangulation, which would produce normal-map seams.
 """
 from __future__ import annotations
 
 import os
 
 import bpy
-from bpy.props import BoolProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, StringProperty
 from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper
+
+
+AXIS_MODES = (
+    ('BAKED', "Baked (no Unity tweak)",
+     "Bake -90° X into mesh data; works with default Unity 6 importer. "
+     "Best for static / bind-pose exports"),
+    ('DECLARED', "Declared (modern, with Unity tweak)",
+     "Keep Blender Z-up in mesh data; FBX header declares Y-up. "
+     "Requires 'Bake Axis Conversion' = ON in Unity 6 importer"),
+)
 
 
 def _ensure_triangulated(mesh_obj):
@@ -55,6 +84,12 @@ class SCULPTKIT_OT_export_unity_fbx(Operator, ExportHelper):
     filename_ext = ".fbx"
     filter_glob: StringProperty(default="*.fbx", options={'HIDDEN'})
 
+    axis_mode: EnumProperty(
+        name="Axis Mode",
+        description="How to encode Blender Z-up → Unity Y-up axis conversion",
+        items=AXIS_MODES,
+        default='BAKED',
+    )
     triangulate: BoolProperty(
         name="Triangulate",
         description="Add a Triangulate modifier so Unity does not re-triangulate after import",
@@ -87,6 +122,7 @@ class SCULPTKIT_OT_export_unity_fbx(Operator, ExportHelper):
             prefs = addon.preferences
             self.triangulate = prefs.export_triangulate
             self.apply_modifiers = prefs.export_apply_modifiers
+            self.axis_mode = prefs.export_axis_mode
         if not self.filepath:
             self.filepath = _default_export_path(bpy.data.filepath) or "character.fbx"
         return ExportHelper.invoke(self, context, event)
@@ -123,13 +159,14 @@ class SCULPTKIT_OT_export_unity_fbx(Operator, ExportHelper):
                 global_scale=1.0,
                 apply_unit_scale=True,
                 apply_scale_options='FBX_SCALE_NONE',
-                bake_space_transform=True,
+                bake_space_transform=(self.axis_mode == 'BAKED'),
                 axis_forward='-Z',
                 axis_up='Y',
                 object_types={'MESH', 'ARMATURE', 'EMPTY'},
                 use_mesh_modifiers=self.apply_modifiers,
                 mesh_smooth_type='FACE',
                 use_tspace=True,
+                colors_type='SRGB',
                 use_custom_props=False,
                 add_leaf_bones=False,
                 primary_bone_axis='Y',
