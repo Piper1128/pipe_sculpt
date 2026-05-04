@@ -121,12 +121,53 @@ class SCULPTKIT_OT_workflow_add_detail(Operator):
 class SCULPTKIT_OT_workflow_retopo(Operator):
     bl_idname = "sculpt_kit.workflow_retopo"
     bl_label = "Retopo"
-    bl_description = "Duplicate the active mesh and run quadriflow with the preset's target face count"
+    bl_description = "Duplicate the active mesh and run retopology (quadriflow or decimate) with the preset's target face count"
     bl_options = {'REGISTER', 'UNDO'}
+
+    method: bpy.props.EnumProperty(
+        name="Method",
+        items=(
+            ('QUADRIFLOW', "Quadriflow",
+             "Auto quad-retopology — best for organic shapes, slower"),
+            ('DECIMATE', "Decimate (Collapse)",
+             "Triangulating decimate modifier — fast, OK for static props, never for characters"),
+        ),
+        default='QUADRIFLOW',
+    )
 
     @classmethod
     def poll(cls, context):
         return _active_mesh(context) is not None
+
+    def _decimate_retopo(self, context, retopo, target_faces):
+        # Use Decimate Collapse to a face-ratio that hits the target.
+        current_faces = len(retopo.data.polygons)
+        if current_faces == 0:
+            return False, "Source mesh has no faces"
+        ratio = max(0.0001, min(1.0, target_faces / current_faces))
+        mod = retopo.modifiers.new(name="SculptKit Decimate", type='DECIMATE')
+        mod.decimate_type = 'COLLAPSE'
+        mod.ratio = ratio
+        mod.use_collapse_triangulate = True
+        try:
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+        except RuntimeError as e:
+            return False, f"Decimate apply failed: {e}"
+        return True, None
+
+    def _quadriflow_retopo(self, context, retopo, target_faces, use_sym):
+        try:
+            bpy.ops.object.quadriflow_remesh(
+                target_faces=target_faces,
+                use_mesh_symmetry=use_sym,
+                use_preserve_sharp=False,
+                use_preserve_boundary=False,
+                smooth_normals=True,
+                mode='FACES',
+            )
+        except RuntimeError as e:
+            return False, f"Quadriflow failed: {e}"
+        return True, None
 
     def execute(self, context):
         obj = _active_mesh(context)
@@ -152,22 +193,17 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
 
         use_sym = preset.use_symmetry_x or preset.use_symmetry_y or preset.use_symmetry_z
 
-        # Snapshot high-poly bone tags before quadriflow destroys the duplicate's
+        # Snapshot high-poly bone tags before remesh destroys the duplicate's
         # attribute. We restore via KDTree once the new mesh is built (GTR Ph3).
         gtr_source = obj  # original high-poly is the bone-tag source
         had_tags = rigging.VERTEX_ATTR in gtr_source.data.attributes
 
-        try:
-            bpy.ops.object.quadriflow_remesh(
-                target_faces=target_faces,
-                use_mesh_symmetry=use_sym,
-                use_preserve_sharp=False,
-                use_preserve_boundary=False,
-                smooth_normals=True,
-                mode='FACES',
-            )
-        except RuntimeError as e:
-            self.report({'ERROR'}, f"Quadriflow failed: {e}")
+        if self.method == 'DECIMATE':
+            ok, err = self._decimate_retopo(context, retopo, target_faces)
+        else:
+            ok, err = self._quadriflow_retopo(context, retopo, target_faces, use_sym)
+        if not ok:
+            self.report({'ERROR'}, err or "Retopo failed")
             return {'CANCELLED'}
 
         if had_tags:
@@ -179,7 +215,8 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
         obj.hide_set(True)
         self.report(
             {'INFO'},
-            f"Retopo'd '{obj.name}' → '{retopo.name}' ({target_faces} faces, sym={use_sym}, {tag_msg})",
+            f"Retopo'd '{obj.name}' → '{retopo.name}' "
+            f"({self.method}, {target_faces} target, sym={use_sym}, {tag_msg})",
         )
         return {'FINISHED'}
 
