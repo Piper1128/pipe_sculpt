@@ -1,13 +1,13 @@
 """Genesis-Tracked Rigging — preserve primitive identity through the sculpt pipeline.
 
-Each starter primitive carries a per-vertex bone-id integer attribute. The
-identity survives voxel remesh via nearest-neighbour transfer (smart_voxel_remesh)
-and is later read back by Generate Rig to build an armature plus initial skin
-weights without manual rigging.
+v0.5 adds clavicle + toes deform bones, IK control bones (hand_ik, elbow_pole,
+foot_ik, knee_pole), and auto-IK constraints on arms and legs. Bone names use
+Blender symmetry suffix (.L / .R) for compatibility with mirror/symmetrize tools.
 """
 from __future__ import annotations
 
 import json
+import math
 
 import bpy
 import mathutils
@@ -19,37 +19,102 @@ META_PROP = "sculpt_kit_bone_data"
 RIG_TYPE_PROP = "sculpt_kit_rig_type"
 
 
-# Bone hierarchy. Coordinates are CURSOR-RELATIVE — converted to mesh-local
-# at the moment of metadata write (see HUMANOID_MESH_ORIGIN_OFFSET).
-# Tuple shape: (id, parent, head_offset, tail_offset)
-HUMANOID_BONES: tuple[tuple[str, str | None, tuple[float, float, float], tuple[float, float, float]], ...] = (
-    ("pelvis",      None,            (0.00,  0.00, -0.418), (0.00,  0.00, -0.082)),
-    ("spine",       "pelvis",        (0.00,  0.00, -0.082), (0.00,  0.00,  0.585)),
-    ("neck",        "spine",         (0.00,  0.00,  0.585), (0.00,  0.00,  0.625)),
-    ("head",        "neck",          (0.00,  0.00,  0.625), (0.00,  0.00,  0.956)),
-    ("L_upper_arm", "spine",         (0.30,  0.00,  0.400), (0.70,  0.00,  0.400)),
-    ("L_forearm",   "L_upper_arm",   (0.70,  0.00,  0.400), (1.05,  0.00,  0.400)),
-    ("L_hand",      "L_forearm",     (1.05,  0.00,  0.400), (1.20,  0.00,  0.400)),
-    ("R_upper_arm", "spine",         (-0.30, 0.00,  0.400), (-0.70, 0.00,  0.400)),
-    ("R_forearm",   "R_upper_arm",   (-0.70, 0.00,  0.400), (-1.05, 0.00,  0.400)),
-    ("R_hand",      "R_forearm",     (-1.05, 0.00,  0.400), (-1.20, 0.00,  0.400)),
-    ("L_thigh",     "pelvis",        (0.11,  0.00, -0.082), (0.11,  0.00, -0.650)),
-    ("L_shin",      "L_thigh",       (0.11,  0.00, -0.650), (0.11,  0.00, -1.050)),
-    ("L_foot",      "L_shin",        (0.11,  0.00, -1.050), (0.11,  0.20, -1.100)),
-    ("R_thigh",     "pelvis",        (-0.11, 0.00, -0.082), (-0.11, 0.00, -0.650)),
-    ("R_shin",      "R_thigh",       (-0.11, 0.00, -0.650), (-0.11, 0.00, -1.050)),
-    ("R_foot",      "R_shin",        (-0.11, 0.00, -1.050), (-0.11, 0.20, -1.100)),
+# Deform bones — these get per-vertex weights via the bone-id attribute.
+# Order is the canonical bone-index ordering; do not reorder without bumping
+# the metadata schema.
+DEFORM_BONE_NAMES: tuple[str, ...] = (
+    "pelvis",
+    "spine",
+    "neck",
+    "head",
+    "clavicle.L",
+    "upper_arm.L",
+    "forearm.L",
+    "hand.L",
+    "clavicle.R",
+    "upper_arm.R",
+    "forearm.R",
+    "hand.R",
+    "upper_leg.L",
+    "lower_leg.L",
+    "foot.L",
+    "toes.L",
+    "upper_leg.R",
+    "lower_leg.R",
+    "foot.R",
+    "toes.R",
+)
+BONE_NAME_TO_INDEX = {n: i for i, n in enumerate(DEFORM_BONE_NAMES)}
+
+
+# Bone definition: (id, parent, head_offset, tail_offset, kind)
+#   kind = 'D' deform, 'C' control (IK targets/poles, root)
+# All offsets are CURSOR-RELATIVE; converted to mesh-local at metadata write
+# (see HUMANOID_MESH_ORIGIN_OFFSET).
+HUMANOID_BONES: tuple = (
+    # Master root
+    ("root",        None,           (0.00,  0.00,  0.00),  (0.00,  0.00,  0.20),  'C'),
+
+    # Body chain
+    ("pelvis",      "root",         (0.00,  0.00, -0.418), (0.00,  0.00, -0.082), 'D'),
+    ("spine",       "pelvis",       (0.00,  0.00, -0.082), (0.00,  0.00,  0.585), 'D'),
+    ("neck",        "spine",        (0.00,  0.00,  0.585), (0.00,  0.00,  0.625), 'D'),
+    ("head",        "neck",         (0.00,  0.00,  0.625), (0.00,  0.00,  0.956), 'D'),
+
+    # Left arm
+    ("clavicle.L",  "spine",        (0.00,  0.00,  0.550), (0.30,  0.00,  0.400), 'D'),
+    ("upper_arm.L", "clavicle.L",   (0.30,  0.00,  0.400), (0.70,  0.00,  0.400), 'D'),
+    ("forearm.L",   "upper_arm.L",  (0.70,  0.00,  0.400), (1.05,  0.00,  0.400), 'D'),
+    ("hand.L",      "forearm.L",    (1.05,  0.00,  0.400), (1.20,  0.00,  0.400), 'D'),
+
+    # Right arm (mirror)
+    ("clavicle.R",  "spine",        (0.00,  0.00,  0.550), (-0.30, 0.00,  0.400), 'D'),
+    ("upper_arm.R", "clavicle.R",   (-0.30, 0.00,  0.400), (-0.70, 0.00,  0.400), 'D'),
+    ("forearm.R",   "upper_arm.R",  (-0.70, 0.00,  0.400), (-1.05, 0.00,  0.400), 'D'),
+    ("hand.R",      "forearm.R",    (-1.05, 0.00,  0.400), (-1.20, 0.00,  0.400), 'D'),
+
+    # Left leg
+    ("upper_leg.L", "pelvis",       (0.11,  0.00, -0.082), (0.11,  0.00, -0.650), 'D'),
+    ("lower_leg.L", "upper_leg.L",  (0.11,  0.00, -0.650), (0.11,  0.00, -1.050), 'D'),
+    ("foot.L",      "lower_leg.L",  (0.11,  0.00, -1.050), (0.11,  0.20, -1.100), 'D'),
+    ("toes.L",      "foot.L",       (0.11,  0.20, -1.100), (0.11,  0.30, -1.100), 'D'),
+
+    # Right leg (mirror)
+    ("upper_leg.R", "pelvis",       (-0.11, 0.00, -0.082), (-0.11, 0.00, -0.650), 'D'),
+    ("lower_leg.R", "upper_leg.R",  (-0.11, 0.00, -0.650), (-0.11, 0.00, -1.050), 'D'),
+    ("foot.R",      "lower_leg.R",  (-0.11, 0.00, -1.050), (-0.11, 0.20, -1.100), 'D'),
+    ("toes.R",      "foot.R",       (-0.11, 0.20, -1.100), (-0.11, 0.30, -1.100), 'D'),
+
+    # IK targets and pole vectors (parented to root, no deformation)
+    ("hand_ik.L",    "root", (1.05,  0.00,  0.400), (1.20,  0.00,  0.400), 'C'),
+    ("elbow_pole.L", "root", (0.70, -0.30,  0.400), (0.70, -0.40,  0.400), 'C'),
+    ("hand_ik.R",    "root", (-1.05, 0.00,  0.400), (-1.20, 0.00,  0.400), 'C'),
+    ("elbow_pole.R", "root", (-0.70, -0.30, 0.400), (-0.70, -0.40, 0.400), 'C'),
+
+    ("foot_ik.L",    "root", (0.11,  0.00, -1.050), (0.11,  0.20, -1.100), 'C'),
+    ("knee_pole.L",  "root", (0.11,  0.30, -0.650), (0.11,  0.40, -0.650), 'C'),
+    ("foot_ik.R",    "root", (-0.11, 0.00, -1.050), (-0.11, 0.20, -1.100), 'C'),
+    ("knee_pole.R",  "root", (-0.11, 0.30, -0.650), (-0.11, 0.40, -0.650), 'C'),
 )
 
-BONE_NAME_TO_INDEX = {b[0]: i for i, b in enumerate(HUMANOID_BONES)}
 
-# The torso primitive sits at cursor + (0, 0, 0.20); after _join it becomes the
-# joined object's origin, so mesh-local coords = cursor-relative - this offset.
+# IK constraints: (driven_bone, target_bone, pole_bone, chain_count, pole_angle_deg)
+HUMANOID_IK: tuple = (
+    ("forearm.L",   "hand_ik.L", "elbow_pole.L", 2,    0.0),
+    ("forearm.R",   "hand_ik.R", "elbow_pole.R", 2,  180.0),
+    ("lower_leg.L", "foot_ik.L", "knee_pole.L",  2,  -90.0),
+    ("lower_leg.R", "foot_ik.R", "knee_pole.R",  2,  -90.0),
+)
+
+
+# Mesh origin offset: torso primitive is the active mesh after _join, sits at
+# cursor + (0, 0, 0.20). All bone coords need this subtracted to land in
+# mesh-local space.
 HUMANOID_MESH_ORIGIN_OFFSET = (0.0, 0.0, 0.20)
 
 
 def tag_primitive(obj, bone_name: str) -> None:
-    """Tag every vertex of a primitive object with its bone index."""
+    """Tag every vertex of a primitive object with its deform-bone index."""
     bone_index = BONE_NAME_TO_INDEX.get(bone_name, -1)
     attrs = obj.data.attributes
     if VERTEX_ATTR in attrs:
@@ -59,34 +124,50 @@ def tag_primitive(obj, bone_name: str) -> None:
         attr.data[i].value = bone_index
 
 
-def _bones_to_mesh_local(bones, mesh_origin_offset):
-    ox, oy, oz = mesh_origin_offset
+def _apply_offset(coord, offset):
+    return [coord[0] - offset[0], coord[1] - offset[1], coord[2] - offset[2]]
+
+
+def _serialize_bones(bones, mesh_origin_offset):
     return [
         {
             "id": b[0],
             "parent": b[1],
-            "head": [b[2][0] - ox, b[2][1] - oy, b[2][2] - oz],
-            "tail": [b[3][0] - ox, b[3][1] - oy, b[3][2] - oz],
+            "head": _apply_offset(b[2], mesh_origin_offset),
+            "tail": _apply_offset(b[3], mesh_origin_offset),
+            "kind": b[4],
         }
         for b in bones
     ]
 
 
+def _serialize_ik(ik_specs):
+    return [
+        {
+            "driven": s[0],
+            "target": s[1],
+            "pole": s[2],
+            "chain": s[3],
+            "pole_angle_deg": s[4],
+        }
+        for s in ik_specs
+    ]
+
+
 def store_bone_metadata(obj, rig_type: str) -> None:
-    """Store the bone hierarchy on the joined object as JSON in mesh-local coords."""
+    """Store the bone hierarchy + IK spec on the joined object as JSON in mesh-local coords."""
     if rig_type == 'HUMANOID':
-        bones = _bones_to_mesh_local(HUMANOID_BONES, HUMANOID_MESH_ORIGIN_OFFSET)
+        bones = _serialize_bones(HUMANOID_BONES, HUMANOID_MESH_ORIGIN_OFFSET)
+        ik = _serialize_ik(HUMANOID_IK)
     else:
         bones = []
-    obj[META_PROP] = json.dumps(bones)
+        ik = []
+    obj[META_PROP] = json.dumps({"bones": bones, "ik": ik})
     obj[RIG_TYPE_PROP] = rig_type
 
 
 def smart_voxel_remesh(obj) -> bool:
-    """Voxel remesh while preserving the bone-id attribute via KDTree nearest-neighbour transfer.
-
-    Returns True if the attribute existed and was transferred; False otherwise.
-    """
+    """Voxel remesh while preserving the bone-id attribute via KDTree nearest-neighbour transfer."""
     attrs = obj.data.attributes
     src_attr = attrs.get(VERTEX_ATTR)
     if src_attr is None:
@@ -118,8 +199,8 @@ class SCULPTKIT_OT_generate_rig(Operator):
     bl_idname = "sculpt_kit.generate_rig"
     bl_label = "Generate Rig"
     bl_description = (
-        "Build an armature and initial skin weights from preserved primitive bone "
-        "metadata (Genesis-Tracked Rigging). Requires a SculptKit starter mesh"
+        "Build an armature, IK setup, and initial skin weights from preserved "
+        "primitive bone metadata (Genesis-Tracked Rigging)"
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -136,7 +217,9 @@ class SCULPTKIT_OT_generate_rig(Operator):
     def execute(self, context):
         mesh_obj = context.active_object
         try:
-            bone_data = json.loads(mesh_obj[META_PROP])
+            payload = json.loads(mesh_obj[META_PROP])
+            bone_data = payload["bones"]
+            ik_data = payload.get("ik", [])
         except (KeyError, ValueError) as e:
             self.report({'ERROR'}, f"Bone metadata missing or corrupt: {e}")
             return {'CANCELLED'}
@@ -152,38 +235,47 @@ class SCULPTKIT_OT_generate_rig(Operator):
         context.collection.objects.link(arm_obj)
         arm_obj.matrix_world = mesh_obj.matrix_world.copy()
 
+        # --- Build edit bones ---
         bpy.ops.object.select_all(action='DESELECT')
         arm_obj.select_set(True)
         context.view_layer.objects.active = arm_obj
         bpy.ops.object.mode_set(mode='EDIT')
 
-        bones = {}
+        edit_bones = arm_data.edit_bones
+        bones_by_id = {}
         for b in bone_data:
-            eb = arm_data.edit_bones.new(b["id"])
+            eb = edit_bones.new(b["id"])
             eb.head = b["head"]
             eb.tail = b["tail"]
-            bones[b["id"]] = eb
+            eb.use_deform = (b["kind"] == 'D')
+            bones_by_id[b["id"]] = eb
+
         for b in bone_data:
             if b["parent"]:
-                child = bones[b["id"]]
-                parent = bones[b["parent"]]
+                child = bones_by_id[b["id"]]
+                parent = bones_by_id[b["parent"]]
                 child.parent = parent
                 if (parent.tail - child.head).length < 0.001:
                     child.use_connect = True
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        bone_names = [b["id"] for b in bone_data]
-        for name in bone_names:
+        # --- Vertex groups + initial weights for deform bones ---
+        deform_names = [b["id"] for b in bone_data if b["kind"] == 'D']
+        for name in deform_names:
             if name not in mesh_obj.vertex_groups:
                 mesh_obj.vertex_groups.new(name=name)
 
         attr = mesh_obj.data.attributes[VERTEX_ATTR]
+        # Map storage-order index -> bone name (DEFORM_BONE_NAMES is the canonical order)
         for vi in range(len(mesh_obj.data.vertices)):
             bi = attr.data[vi].value
-            if 0 <= bi < len(bone_names):
-                mesh_obj.vertex_groups[bone_names[bi]].add([vi], 1.0, 'REPLACE')
+            if 0 <= bi < len(DEFORM_BONE_NAMES):
+                vg_name = DEFORM_BONE_NAMES[bi]
+                if vg_name in mesh_obj.vertex_groups:
+                    mesh_obj.vertex_groups[vg_name].add([vi], 1.0, 'REPLACE')
 
+        # --- Parent + Armature modifier ---
         mesh_obj.parent = arm_obj
         mesh_obj.matrix_parent_inverse = arm_obj.matrix_world.inverted()
 
@@ -194,6 +286,7 @@ class SCULPTKIT_OT_generate_rig(Operator):
         arm_mod.use_vertex_groups = True
         arm_mod.use_bone_envelopes = False
 
+        # --- Smooth weights ---
         if not bpy.app.background:
             context.view_layer.objects.active = mesh_obj
             try:
@@ -205,14 +298,34 @@ class SCULPTKIT_OT_generate_rig(Operator):
             except RuntimeError as e:
                 self.report({'WARNING'}, f"Weight smoothing skipped: {e}")
 
+        # --- IK constraints ---
+        if ik_data:
+            context.view_layer.objects.active = arm_obj
+            bpy.ops.object.mode_set(mode='POSE')
+            for spec in ik_data:
+                pb = arm_obj.pose.bones.get(spec["driven"])
+                if pb is None:
+                    continue
+                ik = pb.constraints.new('IK')
+                ik.target = arm_obj
+                ik.subtarget = spec["target"]
+                ik.pole_target = arm_obj
+                ik.pole_subtarget = spec["pole"]
+                ik.chain_count = spec["chain"]
+                ik.pole_angle = math.radians(spec["pole_angle_deg"])
+            bpy.ops.object.mode_set(mode='OBJECT')
+
         bpy.ops.object.select_all(action='DESELECT')
         arm_obj.select_set(True)
         mesh_obj.select_set(True)
         context.view_layer.objects.active = arm_obj
 
+        n_deform = len(deform_names)
+        n_total = len(bone_data)
+        n_ik = len(ik_data)
         self.report(
             {'INFO'},
-            f"Generated rig '{arm_obj.name}' with {len(bone_data)} bones; mesh skinned.",
+            f"Generated rig '{arm_obj.name}': {n_total} bones ({n_deform} deform), {n_ik} IK chains.",
         )
         return {'FINISHED'}
 

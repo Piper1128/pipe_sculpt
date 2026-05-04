@@ -106,36 +106,44 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
         parts = [head, neck, torso, pelvis]
 
         shoulder_z = 0.40
-        for side, prefix in ((1, "L"), (-1, "R")):
+        for side, suffix in ((1, "L"), (-1, "R")):
+            clavicle = _add_sphere(
+                0.06, (cx + side * 0.15, cy, cz + 0.475)
+            )
+            rigging.tag_primitive(clavicle, f"clavicle.{suffix}")
             upper_arm = _add_sphere(
                 0.075, (cx + side * 0.475, cy, cz + shoulder_z), scale=(3.67, 1.0, 1.0)
             )
-            rigging.tag_primitive(upper_arm, f"{prefix}_upper_arm")
+            rigging.tag_primitive(upper_arm, f"upper_arm.{suffix}")
             forearm = _add_sphere(
                 0.065, (cx + side * 0.875, cy, cz + shoulder_z), scale=(3.46, 1.0, 1.0)
             )
-            rigging.tag_primitive(forearm, f"{prefix}_forearm")
+            rigging.tag_primitive(forearm, f"forearm.{suffix}")
             hand = _add_sphere(
                 0.05, (cx + side * 1.10, cy, cz + shoulder_z), scale=(2.0, 1.0, 0.4)
             )
-            rigging.tag_primitive(hand, f"{prefix}_hand")
-            parts.extend([upper_arm, forearm, hand])
+            rigging.tag_primitive(hand, f"hand.{suffix}")
+            parts.extend([clavicle, upper_arm, forearm, hand])
 
-        for side, prefix in ((1, "L"), (-1, "R")):
+        for side, suffix in ((1, "L"), (-1, "R")):
             x_leg = side * 0.11
             thigh = _add_sphere(
                 0.10, (cx + x_leg, cy, cz - 0.40), scale=(1.0, 1.0, 3.5)
             )
-            rigging.tag_primitive(thigh, f"{prefix}_thigh")
+            rigging.tag_primitive(thigh, f"upper_leg.{suffix}")
             shin = _add_sphere(
                 0.085, (cx + x_leg, cy, cz - 0.875), scale=(1.0, 1.0, 2.88)
             )
-            rigging.tag_primitive(shin, f"{prefix}_shin")
+            rigging.tag_primitive(shin, f"lower_leg.{suffix}")
             foot = _add_sphere(
                 0.075, (cx + x_leg, cy + 0.08, cz - 1.10), scale=(0.85, 1.8, 0.6)
             )
-            rigging.tag_primitive(foot, f"{prefix}_foot")
-            parts.extend([thigh, shin, foot])
+            rigging.tag_primitive(foot, f"foot.{suffix}")
+            toes = _add_sphere(
+                0.04, (cx + x_leg, cy + 0.25, cz - 1.10), scale=(1.5, 1.5, 0.5)
+            )
+            rigging.tag_primitive(toes, f"toes.{suffix}")
+            parts.extend([thigh, shin, foot, toes])
 
         _join(torso, *(p for p in parts if p is not torso))
         rigging.store_bone_metadata(torso, 'HUMANOID')
