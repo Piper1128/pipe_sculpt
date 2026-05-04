@@ -98,13 +98,46 @@ HUMANOID_BONES: tuple = (
 )
 
 
-# IK constraints: (driven_bone, target_bone, pole_bone, chain_count, pole_angle_deg)
+# IK constraints: (driven_bone, target_bone, pole_bone, chain_count)
+# Pole angle is computed from bone geometry at rig-generation time.
 HUMANOID_IK: tuple = (
-    ("forearm.L",   "hand_ik.L", "elbow_pole.L", 2,    0.0),
-    ("forearm.R",   "hand_ik.R", "elbow_pole.R", 2,  180.0),
-    ("lower_leg.L", "foot_ik.L", "knee_pole.L",  2,  -90.0),
-    ("lower_leg.R", "foot_ik.R", "knee_pole.R",  2,  -90.0),
+    ("forearm.L",   "hand_ik.L", "elbow_pole.L", 2),
+    ("forearm.R",   "hand_ik.R", "elbow_pole.R", 2),
+    ("lower_leg.L", "foot_ik.L", "knee_pole.L",  2),
+    ("lower_leg.R", "foot_ik.R", "knee_pole.R",  2),
 )
+
+
+def _signed_angle(u, v, normal):
+    """Signed angle between u and v around normal."""
+    a = u.angle(v, 0.0)
+    if u.cross(v).dot(normal) < 0:
+        a = -a
+    return a
+
+
+def _calc_pole_angle(base_bone, ik_bone, pole_pos):
+    """Compute pole_angle so the chain's rest pose stays untwisted under IK.
+
+    base_bone: top bone of the IK chain (e.g. upper_arm)
+    ik_bone: bone the IK constraint is on (e.g. forearm)
+    pole_pos: armature-space position of the pole target bone head
+
+    Sign convention: Blender's IK measures pole_angle around -chain_dir
+    (i.e. tip-to-root direction), not chain_dir. Empirically verified by
+    pole-angle scan against rest-pose bbox preservation.
+    """
+    chain_dir = ik_bone.tail_local - base_bone.head_local
+    pole_normal = chain_dir.cross(pole_pos - base_bone.head_local)
+    if pole_normal.length < 1e-6:
+        return 0.0
+    projected_pole_axis = pole_normal.cross(base_bone.tail_local - base_bone.head_local)
+    if projected_pole_axis.length < 1e-6:
+        return 0.0
+    base_x = base_bone.matrix_local.to_3x3().col[0]
+    return _signed_angle(
+        base_x, projected_pole_axis, -chain_dir
+    )
 
 
 # Mesh origin offset: torso primitive is the active mesh after _join, sits at
@@ -148,7 +181,6 @@ def _serialize_ik(ik_specs):
             "target": s[1],
             "pole": s[2],
             "chain": s[3],
-            "pole_angle_deg": s[4],
         }
         for s in ik_specs
     ]
@@ -306,13 +338,24 @@ class SCULPTKIT_OT_generate_rig(Operator):
                 pb = arm_obj.pose.bones.get(spec["driven"])
                 if pb is None:
                     continue
+                ik_bone = pb.bone
+                base_bone = ik_bone
+                for _ in range(spec["chain"] - 1):
+                    if base_bone.parent is not None:
+                        base_bone = base_bone.parent
+                pole_bone = arm_obj.data.bones.get(spec["pole"])
+                if pole_bone is None:
+                    continue
+                pole_angle = _calc_pole_angle(
+                    base_bone, ik_bone, pole_bone.head_local
+                )
                 ik = pb.constraints.new('IK')
                 ik.target = arm_obj
                 ik.subtarget = spec["target"]
                 ik.pole_target = arm_obj
                 ik.pole_subtarget = spec["pole"]
                 ik.chain_count = spec["chain"]
-                ik.pole_angle = math.radians(spec["pole_angle_deg"])
+                ik.pole_angle = pole_angle
             bpy.ops.object.mode_set(mode='OBJECT')
 
         bpy.ops.object.select_all(action='DESELECT')
