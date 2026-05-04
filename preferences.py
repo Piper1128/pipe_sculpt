@@ -1,5 +1,11 @@
 import bpy
-from bpy.props import IntProperty, StringProperty, CollectionProperty
+from bpy.props import (
+    BoolProperty,
+    EnumProperty,
+    IntProperty,
+    StringProperty,
+    CollectionProperty,
+)
 from bpy.types import AddonPreferences, Operator, PropertyGroup
 
 
@@ -86,6 +92,40 @@ class SCULPTKIT_Preferences(AddonPreferences):
         max=200000,
     )
 
+    # Bake settings
+    default_bake_resolution: EnumProperty(
+        name="Default Bake Resolution",
+        items=(
+            ('1024', "1K", ""),
+            ('2048', "2K", ""),
+            ('4096', "4K", ""),
+            ('8192', "8K", ""),
+        ),
+        default='2048',
+    )
+    bake_save_to_disk: BoolProperty(
+        name="Save bakes to disk",
+        description="Save baked PNGs to <blend_dir>/textures/. Pack into .blend if no save path",
+        default=True,
+    )
+    bake_use_cage: BoolProperty(
+        name="Use cage object",
+        description="Auto-generate a cage object for bake (eliminates ray-cast artefacts)",
+        default=True,
+    )
+
+    # Export settings
+    export_triangulate: BoolProperty(
+        name="Triangulate before export",
+        description="Add a sticky Triangulate modifier so Unity does not re-triangulate post-import",
+        default=True,
+    )
+    export_apply_modifiers: BoolProperty(
+        name="Apply modifiers on export",
+        description="Bake all modifiers into mesh data (Armature stays as deformer)",
+        default=True,
+    )
+
     def draw(self, context):
         layout = self.layout
 
@@ -95,6 +135,19 @@ class SCULPTKIT_Preferences(AddonPreferences):
         col.prop(self, "target_faces_character")
         col.prop(self, "target_faces_bust")
         col.prop(self, "target_faces_prop")
+
+        box = layout.box()
+        box.label(text="Bake", icon='RENDER_STILL')
+        col = box.column(align=True)
+        col.prop(self, "default_bake_resolution")
+        col.prop(self, "bake_save_to_disk")
+        col.prop(self, "bake_use_cage")
+
+        box = layout.box()
+        box.label(text="Unity FBX Export", icon='EXPORT')
+        col = box.column(align=True)
+        col.prop(self, "export_triangulate")
+        col.prop(self, "export_apply_modifiers")
 
         box = layout.box()
         header = box.row(align=True)

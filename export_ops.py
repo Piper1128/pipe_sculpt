@@ -82,6 +82,11 @@ class SCULPTKIT_OT_export_unity_fbx(Operator, ExportHelper):
         return obj is not None and obj.type in {'MESH', 'ARMATURE'}
 
     def invoke(self, context, event):
+        addon = context.preferences.addons.get(__package__)
+        if addon is not None:
+            prefs = addon.preferences
+            self.triangulate = prefs.export_triangulate
+            self.apply_modifiers = prefs.export_apply_modifiers
         if not self.filepath:
             self.filepath = _default_export_path(bpy.data.filepath) or "character.fbx"
         return ExportHelper.invoke(self, context, event)

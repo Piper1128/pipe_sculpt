@@ -198,6 +198,15 @@ class SCULPTKIT_OT_bake_maps(Operator):
         obj = context.active_object
         return obj is not None and obj.type == 'MESH'
 
+    def invoke(self, context, event):
+        addon = context.preferences.addons.get(__package__)
+        if addon is not None:
+            prefs = addon.preferences
+            self.resolution = prefs.default_bake_resolution
+            self.save_to_disk = prefs.bake_save_to_disk
+            self.use_cage = prefs.bake_use_cage
+        return self.execute(context)
+
     def _bake_one_pass(self, context, low, high, mat, pass_id, suffix, bake_type, colorspace, default_color, size, ray_dist, cage_ext, cage_obj):
         img_name = f"{low.name}{suffix}"
         img = _get_or_create_image(img_name, size, colorspace, default_color)
