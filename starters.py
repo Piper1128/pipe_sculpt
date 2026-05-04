@@ -85,7 +85,7 @@ class SCULPTKIT_OT_starter_bust(Operator):
 class SCULPTKIT_OT_starter_humanoid(Operator):
     bl_idname = "sculpt_kit.starter_humanoid"
     bl_label = "Humanoid"
-    bl_description = "Add a full-body humanoid block (head, torso, limbs) — voxel remesh fuses them when you Start Sculpt"
+    bl_description = "Add a T-posed full-body humanoid block (arms outstretched) — voxel remesh fuses parts when you Start Sculpt; T-pose keeps arms separated from torso"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -99,16 +99,16 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
 
         parts = [head, neck, torso, pelvis]
 
+        shoulder_z = 0.40
         for side in (1, -1):
-            x_arm = side * 0.32
             upper_arm = _add_sphere(
-                0.075, (cx + x_arm, cy, cz + 0.175), scale=(1.0, 1.0, 4.33)
+                0.075, (cx + side * 0.475, cy, cz + shoulder_z), scale=(3.67, 1.0, 1.0)
             )
             forearm = _add_sphere(
-                0.065, (cx + x_arm, cy, cz - 0.325), scale=(1.0, 1.0, 4.23)
+                0.065, (cx + side * 0.875, cy, cz + shoulder_z), scale=(3.46, 1.0, 1.0)
             )
             hand = _add_sphere(
-                0.06, (cx + x_arm, cy, cz - 0.60), scale=(1.0, 0.5, 1.5)
+                0.05, (cx + side * 1.10, cy, cz + shoulder_z), scale=(2.0, 1.0, 0.4)
             )
             parts.extend([upper_arm, forearm, hand])
 

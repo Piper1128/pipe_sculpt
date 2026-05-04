@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "sculpt_kit"
-version = "0.3.1"
+version = "0.3.2"
 name = "SculptKit"
 tagline = "Pie-menus and workflow pipeline for character and face sculpting"
 maintainer = "Piper"
