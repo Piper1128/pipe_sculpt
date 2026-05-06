@@ -44,19 +44,26 @@ sequential operators in the N-panel:
   Genesis-Tracked Rigging preserves per-vertex bone tags.
 
 ### Genesis-Tracked Rigging (GTR)
-Each Humanoid primitive carries a per-vertex bone-id integer attribute. The
+Each tagged primitive carries a per-vertex bone-id integer attribute. The
 attribute survives voxel remesh via KDTree nearest-neighbour transfer, and
-**Generate Rig** reads the tags to build:
+**Generate Rig** reads the tags to build the rig appropriate for the starter:
 
-- Armature with 50+ bones (root, spine, head, jaw, ears, clavicles, arms,
-  legs, 30 finger phalanges, 4 IK targets + 4 pole bones)
+| Starter | Bones | IK |
+|---|---|---|
+| Humanoid | 50+ (root, spine, head, jaw, ears, clavicles, arms, legs, 30 finger phalanges, 4 IK targets + 4 pole bones) | arms + legs |
+| Bust | 7 (root, spine, neck, head, jaw, ear.L, ear.R) | none |
+| Head | 2 (root, head) | none |
+
+Generate Rig produces:
+- Armature with the bones above, parented to mesh
 - Initial vertex weights from the bone tags (one bone per vertex, 1.0)
 - Smoothed weights (3 iterations of vertex_group_smooth)
-- IK constraints on arms and legs with pole_angle computed from rest-pose
-  geometry; bone roll pinned to 0 for predictable IK math
+- IK constraints with pole_angle computed from rest-pose geometry; bone
+  roll pinned to 0 for predictable IK math (Humanoid only)
 
 Tags are also transferred through Retopo automatically, so you can sculpt →
-retopo → rig in any order.
+retopo → rig in any order. Re-running Generate Rig nukes the prior armature
+and rebuilds — no orphan rigs left behind.
 
 ### Manual retopology helper
 For cases where Quadriflow gives bad topology (faces, hard-surface, mech):
@@ -143,13 +150,16 @@ attribution for an inspirational tutorial; no code is copied.
   active texture preview doesn't flip when you re-bake another mesh.
 - Curvature is not baked: Cycles has no native pass and Substance Painter
   generates a better one client-side from the baked normal.
-- **GTR is humanoid-only.** Bust/Head starters get no bones; quadrupeds
-  / birds / mech need a different bone definition table (not yet shipped).
+- **Non-humanoid rigs are not yet supported.** Humanoid, Bust, and Head
+  starters all produce rigs (closed in v0.9.1); quadrupeds, birds, and
+  mech need a new bone definition table — out of scope until needed.
 - **IK pole-angle math is empirically derived** for the hardcoded HUMANOID
   rest pose. Editing bones manually before Generate Rig can twist the IK
   rest pose. Verified for default Humanoid; not for custom edits.
-- **DECLARED FBX axis mode is not yet round-trip verified in Unity 6**
-  — use BAKED (the default) until verified.
+- **DECLARED FBX axis mode** ships with a verification helper:
+  *Verify Axis Mode* button under Export writes both modes plus a
+  Unity 6 test procedure to a folder. Run it once, follow the README,
+  and you'll know whether DECLARED is safe for your importer settings.
 
 ## Workflow
 

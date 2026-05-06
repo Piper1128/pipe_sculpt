@@ -179,25 +179,33 @@ mekaniske former).
 
 ---
 
-## 9. Trin 6 — Generate Rig (kun for humanoid-starters)
+## 9. Trin 6 — Generate Rig (Humanoid / Bust / Head)
 
-Hvis du startede med **Humanoid** har din mesh per-vertex bone-tags
-(GTR-magi). Klik **Generate Rig**:
+Alle tre tagged starters har nu bone-hierarchier. Klik **Generate Rig**:
 
-- En armature med 50+ bones bygges ud fra mesh-formen.
+| Starter | Bones | IK |
+|---|---|---|
+| Humanoid | 50+ (root, spine, hoved, kæbe, ører, kraveben, arme, ben, 30 fingre, 4 IK targets + 4 pole bones) | arme + ben |
+| Bust | 7 (root, spine, nakke, hoved, kæbe, ear.L/R) | ingen |
+| Head | 2 (root, hoved-pivot) | ingen |
+
+Plus:
 - Skin-weights tildeles fra bone-tags (hver vertex får én bone, vægt 1.0).
 - Weights smoothes (3 iterationer) så bevægelser ser naturlige ud.
-- IK-constraints sættes på arme + ben med foot_ik / hand_ik / pole-bones.
+- Bone roll pinned til 0 for forudsigeligt IK (Humanoid).
 
-**Test riggen:**
+**Test riggen (Humanoid):**
 1. Vælg armature i Outliner.
 2. Tryk `Ctrl+Tab` → vælg Pose Mode.
 3. Vælg fx `hand_ik.L` og tryk `G` for at flytte den. Armen bør følge.
 
+**Re-run:** Hvis du klikker Generate Rig igen på samme mesh, den gamle
+armature ryddes automatisk væk — ingen orphan rigs efterlades.
+
 > ⚠️ Hvis du gjorde Retopo først (auto eller manuel), tags overføres
-> automatisk til retopo-mesh, så Generate Rig fungerer på low-poly. Hvis
-> rigging giver weird deformations, kan tag-overførslen være forkert (se
-> "Kendte begrænsninger" nederst).
+> automatisk til retopo-mesh via evaluated mesh (multires applied), så
+> Generate Rig fungerer på low-poly med korrekte weights selv efter
+> aggressive sculpts.
 
 ---
 
@@ -306,7 +314,7 @@ verificér at Unity Color Space er Linear (Project Settings → Player).
 
 ---
 
-## Kendte begrænsninger (v0.9.0)
+## Kendte begrænsninger (v0.9.1)
 
 Disse er ikke bugs men ting der ikke understøttes endnu:
 
@@ -315,10 +323,12 @@ Disse er ikke bugs men ting der ikke understøttes endnu:
   ser mærkelige ud, klik Generate Rig FØR du retopo'er som backup.
 - **Generate Rig på samme mesh igen** rydder nu den gamle armature
   automatisk op — du behøver ikke længere slette den manuelt.
-- **Kun humanoid-rigs** — ingen support for fugle, dyr, robotter.
-- **Bust og Head har endnu ikke bone-hierarchier** (kun Humanoid).
-- **DECLARED axis-mode i FBX export** er ikke verified i Unity 6 endnu —
-  brug Baked indtil videre.
+- **Bust og Head har nu bone-hierarchier:** Bust = 7 bones (root, spine,
+  neck, head, jaw, ear.L/R, ingen IK), Head = 2 bones (root + head pivot).
+- **Kun humanoid/bust/head-rigs** — ingen support for fugle, dyr, robotter.
+- **DECLARED axis-mode i FBX export** kan nu verifiees: klik
+  **Verify Axis Mode** under Export. Det skriver to test-FBX'er og en
+  README med Unity-procedure til en mappe.
 - **IK pole-angle** er empirisk derived for default Humanoid rest pose.
   Hvis du redigerer bones manuelt før Generate Rig, kan IK twiste.
 
