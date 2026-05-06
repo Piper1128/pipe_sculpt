@@ -270,6 +270,12 @@ def smart_voxel_remesh(obj) -> bool:
         (obj.data.vertices[i].co.copy(), src_attr.data[i].value)
         for i in range(len(obj.data.vertices))
     ]
+    if not snapshot:
+        # Degenerate input — voxel_remesh would produce nothing anyway, and a
+        # later kd.find() on an empty tree returns (None, None, None) which
+        # would then crash on snapshot[None]. Bail out cleanly.
+        bpy.ops.object.voxel_remesh()
+        return False
 
     bpy.ops.object.voxel_remesh()
 
@@ -283,6 +289,8 @@ def smart_voxel_remesh(obj) -> bool:
     new_attr = attrs.new(name=VERTEX_ATTR, type='INT', domain='POINT')
     for i in range(len(obj.data.vertices)):
         _, src_idx, _ = kd.find(obj.data.vertices[i].co)
+        if src_idx is None:
+            continue
         new_attr.data[i].value = snapshot[src_idx][1]
     return True
 
