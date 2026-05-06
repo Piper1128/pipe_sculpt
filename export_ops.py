@@ -37,6 +37,7 @@ from __future__ import annotations
 import os
 
 import bpy
+import mathutils
 from bpy.props import BoolProperty, EnumProperty, StringProperty
 from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper
@@ -198,7 +199,200 @@ class PIPESCULPT_OT_export_unity_fbx(Operator, ExportHelper):
         return {'FINISHED'}
 
 
-_classes = (PIPESCULPT_OT_export_unity_fbx,)
+def _build_axis_calibration_mesh(name: str):
+    """Build an asymmetric L-shape with directional indicators.
+
+    Geometry layout in Blender (Z-up, +Y forward, +X right):
+      - Centre cube at origin (size 0.4) — reference body
+      - Tall thin pillar on +Z (length 1.0) — should point UP in Unity
+      - Short stub on +X (length 0.6) — should point RIGHT in Unity
+      - Short stub on +Y (length 0.4) — should point FORWARD in Unity
+
+    The three arms have visibly different lengths so the Unity importer
+    can be visually verified at a glance: which axis is which after the
+    Z-up → Y-up conversion.
+    """
+    import bmesh
+
+    bm = bmesh.new()
+    # Centre cube
+    bmesh.ops.create_cube(bm, size=0.4)
+
+    # +Z arm (UP indicator) — tallest
+    bmesh.ops.create_cube(bm, size=0.15, matrix=mathutils.Matrix.Translation((0.0, 0.0, 0.7)))
+    # +X arm (RIGHT indicator) — medium
+    bmesh.ops.create_cube(bm, size=0.15, matrix=mathutils.Matrix.Translation((0.45, 0.0, 0.0)))
+    # +Y arm (FORWARD indicator) — shortest
+    bmesh.ops.create_cube(bm, size=0.15, matrix=mathutils.Matrix.Translation((0.0, 0.30, 0.0)))
+
+    mesh = bpy.data.meshes.new(name)
+    bm.to_mesh(mesh)
+    bm.free()
+    return mesh
+
+
+class PIPESCULPT_OT_export_axis_calibration(Operator):
+    bl_idname = "pipe_sculpt.export_axis_calibration"
+    bl_label = "Export Axis Calibration FBX (Both Modes)"
+    bl_description = (
+        "Export a small reference mesh (cube + 3 directional arms) in BOTH "
+        "BAKED and DECLARED axis modes to a folder, plus a README with the "
+        "Unity 6 verification procedure. Use to validate that DECLARED mode "
+        "round-trips correctly through your Unity importer settings"
+    )
+    bl_options = {'REGISTER'}
+
+    directory: StringProperty(
+        name="Output Folder",
+        description="Folder to write 'baked.fbx' + 'declared.fbx' + 'README.txt'",
+        subtype='DIR_PATH',
+    )
+
+    def invoke(self, context, event):
+        if not self.directory:
+            blend_path = bpy.data.filepath
+            self.directory = os.path.dirname(blend_path) if blend_path else os.path.expanduser("~")
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        out_dir = bpy.path.abspath(self.directory)
+        if not os.path.isdir(out_dir):
+            self.report({'ERROR'}, f"Output folder doesn't exist: {out_dir}")
+            return {'CANCELLED'}
+
+        # Build the calibration mesh
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        prior_active = context.view_layer.objects.active
+        prior_selection = list(context.selected_objects)
+
+        mesh_data = _build_axis_calibration_mesh("PipeSculpt_AxisCalibration")
+        cal_obj = bpy.data.objects.new("PipeSculpt_AxisCalibration", mesh_data)
+        context.collection.objects.link(cal_obj)
+        bpy.ops.object.select_all(action='DESELECT')
+        cal_obj.select_set(True)
+        context.view_layer.objects.active = cal_obj
+
+        # Export both modes side by side
+        try:
+            for mode_id, fname in (('BAKED', 'baked.fbx'), ('DECLARED', 'declared.fbx')):
+                bpy.ops.export_scene.fbx(
+                    filepath=os.path.join(out_dir, fname),
+                    use_selection=True,
+                    use_active_collection=False,
+                    global_scale=1.0,
+                    apply_unit_scale=True,
+                    apply_scale_options='FBX_SCALE_NONE',
+                    bake_space_transform=(mode_id == 'BAKED'),
+                    axis_forward='-Z',
+                    axis_up='Y',
+                    object_types={'MESH'},
+                    use_mesh_modifiers=True,
+                    mesh_smooth_type='FACE',
+                    use_tspace=True,
+                    colors_type='SRGB',
+                    use_custom_props=False,
+                    add_leaf_bones=False,
+                    bake_anim=False,
+                    path_mode='COPY',
+                    embed_textures=False,
+                    batch_mode='OFF',
+                )
+        finally:
+            # Always clean up the calibration object, even on export failure
+            bpy.data.objects.remove(cal_obj, do_unlink=True)
+            bpy.data.meshes.remove(mesh_data, do_unlink=True)
+            # Restore prior selection
+            for o in prior_selection:
+                if o.name in bpy.data.objects:
+                    o.select_set(True)
+            if prior_active is not None and prior_active.name in bpy.data.objects:
+                context.view_layer.objects.active = prior_active
+
+        # Write the verification procedure
+        readme_path = os.path.join(out_dir, "README.txt")
+        with open(readme_path, "w", encoding="utf-8") as f:
+            f.write(_AXIS_CALIBRATION_README)
+
+        self.report(
+            {'INFO'},
+            f"Wrote baked.fbx + declared.fbx + README.txt to {out_dir}",
+        )
+        return {'FINISHED'}
+
+
+_AXIS_CALIBRATION_README = """\
+PipeSculpt — DECLARED axis-mode round-trip verification
+
+Goal: confirm that the DECLARED FBX axis mode (bake_space_transform=False,
+axis -Z/Y) imports correctly into your Unity 6 setup so PipeSculpt can
+flag DECLARED as production-ready.
+
+The two FBX files in this folder were exported from the same source mesh
+in Blender. The mesh is a centre cube plus three asymmetric arms:
+
+  +Z (UP):      tallest arm, 0.7 m above origin
+  +X (RIGHT):   medium arm, 0.45 m to the right of origin
+  +Y (FORWARD): shortest arm, 0.30 m forward of origin
+
+After import to Unity 6, each arm should map to the matching Unity axis:
+
+  Unity +Y (up)      ← Blender +Z (cube's tallest arm)
+  Unity +X (right)   ← Blender +X (cube's medium arm)
+  Unity +Z (forward) ← Blender +Y (cube's shortest arm)
+
+================================================================
+Test 1 — BAKED mode (this should already work without tweaks)
+================================================================
+
+1. Drop baked.fbx into Unity 6's Project window.
+2. Select the imported asset, open Inspector → Model tab.
+3. Verify under "Scene":
+     - Bake Axis Conversion: OFF
+4. Drag the imported prefab into the scene. Front view (Camera looking
+   down +Z, i.e. press '2' on numpad with default camera), check:
+     - Tallest arm points UP (Y+)
+     - Medium arm points RIGHT (X+)
+     - Shortest arm points FORWARD (away from camera, Z+)
+5. Pass criteria: all three arms point at the expected Unity axis.
+
+================================================================
+Test 2 — DECLARED mode (the one we're verifying)
+================================================================
+
+1. Drop declared.fbx into Unity 6's Project window.
+2. Select the imported asset, open Inspector → Model tab.
+3. Under "Scene", set:
+     - Bake Axis Conversion: ON
+   Click "Apply".
+4. Drag the imported prefab into the scene.
+5. Verify the same axis mapping as Test 1:
+     - Tallest arm points UP
+     - Medium arm points RIGHT
+     - Shortest arm points FORWARD
+6. Pass criteria: all three arms point at the expected Unity axis,
+   identical to Test 1.
+
+================================================================
+Reporting back
+================================================================
+
+If both tests pass: DECLARED mode is verified and PipeSculpt's
+README/MANUAL can drop the "not yet round-trip tested" caveat. Set the
+Preferences default to either mode based on which workflow you prefer.
+
+If Test 2 fails (DECLARED arms point wrong way) or only works with
+"Bake Axis Conversion" OFF: we have a Blender export setting wrong.
+Note which arm points where ("the tallest arm points -Z instead of +Y")
+and report — that pinpoints which axis the converter is double-rotating.
+"""
+
+
+_classes = (
+    PIPESCULPT_OT_export_unity_fbx,
+    PIPESCULPT_OT_export_axis_calibration,
+)
 
 
 def register():

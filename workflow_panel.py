@@ -70,6 +70,7 @@ class PIPESCULPT_PT_workflow(Panel):
         col.scale_y = 1.4
         col.label(text="Export", icon='EXPORT')
         col.operator("pipe_sculpt.export_unity_fbx", icon='OUTLINER_OB_MESH')
+        col.operator("pipe_sculpt.export_axis_calibration", text="Verify Axis Mode", icon='ORIENTATION_GIMBAL')
 
 
 _classes = (PIPESCULPT_PT_workflow,)
