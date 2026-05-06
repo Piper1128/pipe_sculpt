@@ -290,21 +290,45 @@ def smart_voxel_remesh(obj) -> bool:
 def transfer_bone_tags_from_high(high_obj, low_obj) -> bool:
     """Copy the per-vertex bone-id attribute from high_obj to low_obj via KDTree.
 
-    Used after retopology (Quadriflow / Decimate) so the new low-poly mesh inherits
-    the high-poly's tags, allowing Generate Rig to skin the low-poly directly.
-    Both objects must be in the same world frame (same matrix_world).
+    Used after retopology (Quadriflow / Decimate / manual) so the new low-poly
+    mesh inherits the high-poly's tags, allowing Generate Rig to skin the
+    low-poly directly. Both objects must be in the same world frame.
+
+    Uses the evaluated high-poly mesh (with multires applied if present), not
+    the base mesh. Without this, nearest-neighbour matches BASE-mesh positions
+    against EVALUATED low-poly vertices — when the user has sculpted on a
+    multires modifier, the multires displacement can push surface verts
+    further than the base-vertex spacing, and tags land on wrong bones.
 
     Returns True on success.
     """
-    src_attr = high_obj.data.attributes.get(VERTEX_ATTR)
-    if src_attr is None:
+    if VERTEX_ATTR not in high_obj.data.attributes:
         return False
 
-    high_verts = high_obj.data.vertices
-    kd = mathutils.kdtree.KDTree(len(high_verts))
-    for i, v in enumerate(high_verts):
-        kd.insert(v.co, i)
-    kd.balance()
+    # Get the evaluated mesh so multires displacements are reflected in the
+    # vertex positions we KDTree against.
+    dg = bpy.context.evaluated_depsgraph_get()
+    high_eval = high_obj.evaluated_get(dg)
+    high_mesh = high_eval.to_mesh()
+    try:
+        eval_attr = high_mesh.attributes.get(VERTEX_ATTR)
+        if eval_attr is None:
+            # Attribute didn't survive evaluation (rare) — fall back to base.
+            base_attr = high_obj.data.attributes[VERTEX_ATTR]
+            kd = mathutils.kdtree.KDTree(len(high_obj.data.vertices))
+            for i, v in enumerate(high_obj.data.vertices):
+                kd.insert(v.co, i)
+            kd.balance()
+            tag_values = [base_attr.data[i].value for i in range(len(high_obj.data.vertices))]
+        else:
+            kd = mathutils.kdtree.KDTree(len(high_mesh.vertices))
+            for i, v in enumerate(high_mesh.vertices):
+                kd.insert(v.co, i)
+            kd.balance()
+            # Cache attribute values before to_mesh_clear() invalidates eval_attr.
+            tag_values = [eval_attr.data[i].value for i in range(len(high_mesh.vertices))]
+    finally:
+        high_eval.to_mesh_clear()
 
     low_attrs = low_obj.data.attributes
     if VERTEX_ATTR in low_attrs:
@@ -312,7 +336,7 @@ def transfer_bone_tags_from_high(high_obj, low_obj) -> bool:
     new_attr = low_attrs.new(name=VERTEX_ATTR, type='INT', domain='POINT')
     for i, v in enumerate(low_obj.data.vertices):
         _, src_idx, _ = kd.find(v.co)
-        new_attr.data[i].value = src_attr.data[src_idx].value
+        new_attr.data[i].value = tag_values[src_idx]
 
     # Copy the JSON metadata too so Generate Rig can read bone hierarchy
     if META_PROP in high_obj:
