@@ -118,6 +118,19 @@ class PIPESCULPT_OT_workflow_add_detail(Operator):
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
+        # Refuse to stack Multires on top of Subsurf — that produces double
+        # subdivision (Subsurf at base, Multires on top). The user almost
+        # certainly forgot to click Start Sculpt, which strips Subsurf after
+        # voxel_remesh. Tell them so explicitly instead of silently producing
+        # an over-subdivided mesh.
+        if any(m.type == 'SUBSURF' for m in obj.modifiers):
+            self.report(
+                {'ERROR'},
+                "Mesh still has a Subsurf modifier — click 'Start Sculpt' "
+                "first so it gets voxel-remeshed and Subsurf removed",
+            )
+            return {'CANCELLED'}
+
         bpy.ops.object.shade_smooth()
 
         mod = next((m for m in obj.modifiers if m.type == 'MULTIRES'), None)
@@ -170,6 +183,11 @@ class PIPESCULPT_OT_workflow_retopo(Operator):
         current_faces = len(retopo.data.polygons)
         if current_faces == 0:
             return False, "Source mesh has no faces"
+        if target_faces >= current_faces:
+            return False, (
+                f"Target {target_faces} >= source {current_faces} — "
+                "decimate would be a no-op. Pick a smaller target or use Quadriflow."
+            )
         ratio = max(0.0001, min(1.0, target_faces / current_faces))
         mod = retopo.modifiers.new(name="PipeSculpt Decimate", type='DECIMATE')
         mod.decimate_type = 'COLLAPSE'

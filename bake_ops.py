@@ -124,7 +124,13 @@ def _build_cage_object(low_obj, extrusion: float):
     bm.free()
     cage_data.update()
 
+    # Display as wireframe so the cage doesn't visually fight the low-poly
+    # while bake runs. Can't use hide_viewport=True because that would remove
+    # the object from the depsgraph and Cycles would fail to find the cage
+    # for ray-casting. hide_select=True keeps the user from clicking it.
     cage.hide_render = True
+    cage.hide_select = True
+    cage.display_type = 'WIRE'
     return cage
 
 
@@ -227,7 +233,11 @@ class PIPESCULPT_OT_bake_maps(Operator):
             self.resolution = prefs.default_bake_resolution
             self.save_to_disk = prefs.bake_save_to_disk
             self.use_cage = prefs.bake_use_cage
-        return self.execute(context)
+        # Show a properties dialog so the user can pick resolution / passes /
+        # cage / save-to-disk before kicking off a multi-minute bake. Used to
+        # call execute() directly, which forced people to undo + re-run if a
+        # default was wrong.
+        return context.window_manager.invoke_props_dialog(self, width=320)
 
     def _bake_one_pass(self, context, low, high, mat, pass_id, suffix, colorspace, default_color, size, ray_dist, cage_ext, cage_obj, base_samples):
         img_name = f"{low.name}{suffix}"

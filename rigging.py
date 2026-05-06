@@ -375,6 +375,12 @@ class PIPESCULPT_OT_generate_rig(Operator):
 
     def execute(self, context):
         mesh_obj = context.active_object
+        # Snapshot the user's prior mode so we can restore it. Generate Rig
+        # bounces through OBJECT → EDIT → OBJECT → WEIGHT_PAINT → OBJECT →
+        # POSE → OBJECT, which silently broke the user's session if they
+        # were in SCULPT mode on a different object.
+        prior_active = context.view_layer.objects.active
+        prior_mode = context.mode
         try:
             payload = json.loads(mesh_obj[META_PROP])
             bone_data = payload["bones"]
@@ -512,6 +518,29 @@ class PIPESCULPT_OT_generate_rig(Operator):
         arm_obj.select_set(True)
         mesh_obj.select_set(True)
         context.view_layer.objects.active = arm_obj
+
+        # Restore the user's prior mode if we disrupted it. context.mode strings
+        # ('SCULPT', 'EDIT_MESH', 'POSE', ...) don't map 1:1 to mode_set args
+        # ('SCULPT', 'EDIT', 'POSE', ...). Translate the common cases; if it
+        # fails (e.g. prior_active was deleted), silently stay in OBJECT.
+        if prior_active is not None and prior_active.name in bpy.data.objects:
+            mode_translation = {
+                'OBJECT': 'OBJECT',
+                'EDIT_MESH': 'EDIT',
+                'EDIT_ARMATURE': 'EDIT',
+                'SCULPT': 'SCULPT',
+                'POSE': 'POSE',
+                'PAINT_WEIGHT': 'WEIGHT_PAINT',
+                'PAINT_VERTEX': 'VERTEX_PAINT',
+                'PAINT_TEXTURE': 'TEXTURE_PAINT',
+            }
+            target_mode = mode_translation.get(prior_mode)
+            if target_mode and target_mode != 'OBJECT' and prior_active is not arm_obj:
+                try:
+                    context.view_layer.objects.active = prior_active
+                    bpy.ops.object.mode_set(mode=target_mode)
+                except RuntimeError:
+                    context.view_layer.objects.active = arm_obj
 
         n_deform = len(deform_names)
         n_total = len(bone_data)

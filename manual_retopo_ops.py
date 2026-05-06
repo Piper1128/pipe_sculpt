@@ -70,12 +70,23 @@ def _resolve_high_and_retopo(context):
 
 
 def _spawn_retopo_mesh(context, high):
-    """Create a small single-quad retopo starter near high-poly's origin."""
+    """Create a retopo mesh with a single vertex on X=0 at high-poly's origin.
+
+    Earlier versions added a 10cm primitive plane, but its 4 verts at
+    (±0.05, ±0.05, 0) collided with X-symmetry: not exactly on X=0, so
+    Mirror's merge_threshold didn't fuse them and the user got 8
+    overlapping verts. A single vertex at X=0 mirrors cleanly (merge
+    eats the duplicate) and gives the user a starting point to extrude
+    from. Shrinkwrap pulls it onto the high-poly surface immediately.
+    """
     loc = high.matrix_world @ mathutils.Vector((0.0, 0.0, 0.0))
-    bpy.ops.mesh.primitive_plane_add(size=0.10, location=loc)
-    obj = context.active_object
-    obj.name = f"{high.name}{RETOPO_NAME_SUFFIX}"
-    obj.data.name = obj.name
+    mesh_data = bpy.data.meshes.new(f"{high.name}{RETOPO_NAME_SUFFIX}")
+    # One vertex at the local origin (X=0); Shrinkwrap snaps it to surface.
+    mesh_data.from_pydata([(0.0, 0.0, 0.0)], [], [])
+    mesh_data.update()
+    obj = bpy.data.objects.new(mesh_data.name, mesh_data)
+    obj.location = loc
+    context.collection.objects.link(obj)
     return obj
 
 
@@ -244,6 +255,12 @@ class PIPESCULPT_OT_retopo_manual_setup(Operator):
 
         if retopo is None:
             retopo = _spawn_retopo_mesh(context, high)
+
+        # _ensure_modifiers calls modifier_move_to_index which is an operator
+        # and needs the retopo as both selected and active.
+        bpy.ops.object.select_all(action='DESELECT')
+        retopo.select_set(True)
+        context.view_layer.objects.active = retopo
 
         # Pin the high-poly identity on the retopo as a custom prop. This
         # survives object renames (so Finish still pairs them up) and lets us
