@@ -13,8 +13,21 @@ def _active_mesh(context):
 
 
 def _max_bbox_dim(obj) -> float:
-    dims = obj.dimensions
-    return max(dims.x, dims.y, dims.z, 0.001)
+    """Return the largest local-space mesh dimension.
+
+    obj.dimensions is in WORLD space (factoring in obj.scale), but
+    obj.data.remesh_voxel_size is in LOCAL space — mixing the two means
+    a mesh imported with scale=2 ends up with 2x too coarse voxels.
+    Compute from the mesh data directly so scale is irrelevant.
+    """
+    if not obj.data.vertices:
+        return 0.001
+    coords = [v.co for v in obj.data.vertices]
+    xs = [c.x for c in coords]
+    ys = [c.y for c in coords]
+    zs = [c.z for c in coords]
+    span = max(max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs))
+    return max(span, 0.001)
 
 
 def _selected_preset(context) -> presets_mod.Preset:
