@@ -240,9 +240,171 @@ class PIPESCULPT_OT_uv_smart_unwrap(Operator):
         return {'FINISHED'}
 
 
+CHECKER_MAT_NAME = "PipeSculpt_UV_Checker"
+
+
+def _build_checker_material():
+    """Build a procedural UV checker material with a strong diagonal pattern.
+
+    Uses two stacked Checker Texture nodes (UV-mapped, perpendicular scales)
+    so the pattern reads even on heavily stretched islands. Output to Emission
+    so shading-state doesn't affect what you see — it's a checker, not a
+    rendering test.
+    """
+    mat = bpy.data.materials.get(CHECKER_MAT_NAME)
+    if mat is not None:
+        return mat
+
+    mat = bpy.data.materials.new(CHECKER_MAT_NAME)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    # Wipe default nodes
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+
+    out = nt.nodes.new('ShaderNodeOutputMaterial')
+    emit = nt.nodes.new('ShaderNodeEmission')
+    chk_a = nt.nodes.new('ShaderNodeTexChecker')
+    chk_b = nt.nodes.new('ShaderNodeTexChecker')
+    mix = nt.nodes.new('ShaderNodeMixRGB')
+    uv = nt.nodes.new('ShaderNodeUVMap')
+
+    chk_a.inputs['Scale'].default_value = 16.0
+    chk_a.inputs['Color1'].default_value = (1.0, 1.0, 1.0, 1.0)
+    chk_a.inputs['Color2'].default_value = (0.05, 0.05, 0.05, 1.0)
+
+    chk_b.inputs['Scale'].default_value = 4.0
+    chk_b.inputs['Color1'].default_value = (1.0, 0.3, 0.3, 1.0)  # red
+    chk_b.inputs['Color2'].default_value = (0.3, 1.0, 0.3, 1.0)  # green
+
+    mix.blend_type = 'MULTIPLY'
+    mix.inputs['Fac'].default_value = 0.5
+
+    nt.links.new(uv.outputs['UV'], chk_a.inputs['Vector'])
+    nt.links.new(uv.outputs['UV'], chk_b.inputs['Vector'])
+    nt.links.new(chk_a.outputs['Color'], mix.inputs['Color1'])
+    nt.links.new(chk_b.outputs['Color'], mix.inputs['Color2'])
+    nt.links.new(mix.outputs['Color'], emit.inputs['Color'])
+    nt.links.new(emit.outputs['Emission'], out.inputs['Surface'])
+
+    # Position nodes for tidy graph if user opens the shader editor
+    out.location  = (400, 0)
+    emit.location = (200, 0)
+    mix.location  = (0, 0)
+    chk_a.location = (-200, 100)
+    chk_b.location = (-200, -100)
+    uv.location   = (-400, 0)
+
+    return mat
+
+
+class PIPESCULPT_OT_uv_checker_toggle(Operator):
+    bl_idname = "pipe_sculpt.uv_checker_toggle"
+    bl_label = "Toggle UV Checker"
+    bl_description = (
+        "Add or remove a procedural UV checker material on the active mesh. "
+        "Use it to spot stretched / squished UV islands at a glance — good "
+        "checker squares should be visibly square in the 3D viewport"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return _active_mesh(context) is not None
+
+    def execute(self, context):
+        obj = _active_mesh(context)
+        # Look for an existing checker slot
+        existing_idx = next(
+            (i for i, slot in enumerate(obj.material_slots)
+             if slot.material is not None and slot.material.name == CHECKER_MAT_NAME),
+            None,
+        )
+        if existing_idx is not None:
+            # Toggle off: remove that slot only (preserves user's other materials)
+            obj.active_material_index = existing_idx
+            bpy.ops.object.material_slot_remove()
+            self.report({'INFO'}, "UV checker removed")
+            return {'FINISHED'}
+
+        mat = _build_checker_material()
+        obj.data.materials.append(mat)
+        obj.active_material_index = len(obj.material_slots) - 1
+
+        # Switch to Material Preview shading mode so the user actually sees the
+        # checker. Solid mode hides procedural textures.
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                for space in area.spaces:
+                    if space.type == 'VIEW_3D':
+                        space.shading.type = 'MATERIAL'
+                        break
+
+        self.report({'INFO'}, "UV checker added — switch to Material Preview if hidden")
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_uv_stretch_toggle(Operator):
+    bl_idname = "pipe_sculpt.uv_stretch_toggle"
+    bl_label = "Toggle UV Stretch Heatmap"
+    bl_description = (
+        "Toggle the UV editor's Display Stretch overlay on the first open UV "
+        "editor. Red = stretched, blue = compressed, green = good. If no UV "
+        "editor is open, opens one in a temporary split"
+    )
+    bl_options = {'REGISTER'}
+
+    stretch_mode: EnumProperty(
+        name="Stretch Mode",
+        items=(
+            ('ANGLE', "Angle", "Visualise UV angular distortion"),
+            ('AREA',  "Area",  "Visualise UV area distortion"),
+        ),
+        default='ANGLE',
+    )
+
+    @classmethod
+    def poll(cls, context):
+        # We need either a UV editor in the screen or a 3D view we can split
+        return any(a.type in {'IMAGE_EDITOR', 'VIEW_3D'} for a in context.screen.areas)
+
+    def _find_uv_editor(self, context):
+        for area in context.screen.areas:
+            if area.type == 'IMAGE_EDITOR':
+                for space in area.spaces:
+                    if space.type == 'IMAGE_EDITOR' and space.mode == 'UV':
+                        return space
+        return None
+
+    def execute(self, context):
+        space = self._find_uv_editor(context)
+        if space is None:
+            self.report(
+                {'WARNING'},
+                "No UV editor open — open one (Shift+F10) and re-run, or "
+                "use a UV-Editing workspace",
+            )
+            return {'CANCELLED'}
+
+        ed = space.uv_editor
+        # show_stretch is the master toggle; display_stretch_type chooses mode
+        new_state = not ed.show_stretch
+        ed.show_stretch = new_state
+        if new_state:
+            ed.display_stretch_type = self.stretch_mode
+
+        msg = f"Stretch overlay {'ON' if new_state else 'OFF'}"
+        if new_state:
+            msg += f" ({self.stretch_mode.lower()})"
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+
 _classes = (
     PIPESCULPT_OT_uv_auto_seam,
     PIPESCULPT_OT_uv_smart_unwrap,
+    PIPESCULPT_OT_uv_checker_toggle,
+    PIPESCULPT_OT_uv_stretch_toggle,
 )
 
 
