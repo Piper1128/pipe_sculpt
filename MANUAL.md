@@ -306,19 +306,21 @@ verificér at Unity Color Space er Linear (Project Settings → Player).
 
 ---
 
-## Kendte begrænsninger (v0.8.x)
+## Kendte begrænsninger (v0.9.0)
 
 Disse er ikke bugs men ting der ikke understøttes endnu:
 
-- **Tag-overførsel gennem retopo** kan placere weights forkert hvis du har
-  sculptet aggressivt (verts trukket > nabo-vertex-spacing). Workaround:
-  klik Generate Rig FØR du retopo'er, så har du en backup.
-- **Generate Rig på samme mesh igen** efterlader den gamle armature i
-  scenen. Slet den manuelt.
+- **Tag-overførsel gennem retopo** bruger nu evaluated mesh (multires
+  applied), så aggressive sculpts overlever korrekt. Hvis weights stadig
+  ser mærkelige ud, klik Generate Rig FØR du retopo'er som backup.
+- **Generate Rig på samme mesh igen** rydder nu den gamle armature
+  automatisk op — du behøver ikke længere slette den manuelt.
 - **Kun humanoid-rigs** — ingen support for fugle, dyr, robotter.
 - **Bust og Head har endnu ikke bone-hierarchier** (kun Humanoid).
 - **DECLARED axis-mode i FBX export** er ikke verified i Unity 6 endnu —
   brug Baked indtil videre.
+- **IK pole-angle** er empirisk derived for default Humanoid rest pose.
+  Hvis du redigerer bones manuelt før Generate Rig, kan IK twiste.
 
 ---
 
