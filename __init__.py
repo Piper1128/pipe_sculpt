@@ -6,12 +6,13 @@ from . import workflow_ops
 from . import bake_ops
 from . import export_ops
 from . import manual_retopo_ops
+from . import uv_ops
 from . import workflow_panel
 from . import keymap
 
 _modules = (
     preferences, pie_menus, rigging, starters, workflow_ops,
-    bake_ops, export_ops, manual_retopo_ops, workflow_panel, keymap,
+    bake_ops, export_ops, manual_retopo_ops, uv_ops, workflow_panel, keymap,
 )
 
 
