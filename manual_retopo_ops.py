@@ -35,6 +35,11 @@ RETOPO_NAME_SUFFIX = "_retopo_manual"
 MIRROR_MOD_NAME = "PipeSculpt Mirror"
 SHRINKWRAP_MOD_NAME = "PipeSculpt Shrinkwrap"
 
+# Custom prop names — survive renames so Finish/Cancel can still pair
+# the retopo with its high-poly when the user has changed object names.
+RETOPO_HIGH_PROP = "pipe_sculpt_retopo_high"
+RETOPO_MARKER_PROP = "pipe_sculpt_retopo_active"
+
 
 def _find_3d_view_space(context):
     for area in context.screen.areas:
@@ -170,6 +175,12 @@ class PIPESCULPT_OT_retopo_manual_setup(Operator):
         if retopo is None:
             retopo = _spawn_retopo_mesh(context, high)
 
+        # Pin the high-poly identity on the retopo as a custom prop. This
+        # survives object renames (so Finish still pairs them up) and lets us
+        # detect "an active retopo session" from outside of name conventions.
+        retopo[RETOPO_HIGH_PROP] = high.name
+        retopo[RETOPO_MARKER_PROP] = True
+
         _ensure_modifiers(retopo, high, self.shrinkwrap_offset)
 
         if self.lock_high_poly:
@@ -204,18 +215,29 @@ class PIPESCULPT_OT_retopo_manual_finish(Operator):
     @classmethod
     def poll(cls, context):
         obj = context.active_object
-        return obj is not None and obj.type == 'MESH' and obj.name.endswith(RETOPO_NAME_SUFFIX)
+        if obj is None or obj.type != 'MESH':
+            return False
+        # Accept either the prop marker (preferred — survives renames) or the
+        # legacy suffix convention (older retopo sessions saved before the
+        # marker existed).
+        return bool(obj.get(RETOPO_MARKER_PROP)) or obj.name.endswith(RETOPO_NAME_SUFFIX)
 
     def execute(self, context):
         retopo = context.active_object
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Identify paired high-poly: name = retopo.name minus the suffix
-        base_name = retopo.name[: -len(RETOPO_NAME_SUFFIX)]
-        high = bpy.data.objects.get(base_name)
+        # Resolve high-poly: prop marker first (rename-safe), then legacy suffix.
+        high_name = retopo.get(RETOPO_HIGH_PROP)
+        if not high_name and retopo.name.endswith(RETOPO_NAME_SUFFIX):
+            high_name = retopo.name[: -len(RETOPO_NAME_SUFFIX)]
+        high = bpy.data.objects.get(high_name) if high_name else None
         if high is None or high.type != 'MESH':
-            self.report({'ERROR'}, f"Could not find paired high-poly '{base_name}'")
+            self.report(
+                {'ERROR'},
+                f"Could not find paired high-poly '{high_name}'. "
+                "Re-run Setup Manual Retopo with both meshes selected.",
+            )
             return {'CANCELLED'}
 
         bpy.ops.object.select_all(action='DESELECT')
@@ -244,6 +266,11 @@ class PIPESCULPT_OT_retopo_manual_finish(Operator):
         # Hide and unlock high-poly
         high.hide_select = False
         high.hide_set(True)
+
+        # Clean up our pairing props — session is over, don't leak state
+        for prop in (RETOPO_HIGH_PROP, RETOPO_MARKER_PROP):
+            if prop in retopo:
+                del retopo[prop]
 
         # Reset snap to vertex (default-ish) so the user isn't surprised later
         ts = context.scene.tool_settings
