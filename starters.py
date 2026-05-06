@@ -55,7 +55,17 @@ def _join(active, *others):
     bpy.ops.object.join()
 
 
-def _finalize(obj, name, subsurf_levels=1):
+def _finalize(obj, name, subsurf_levels=0):
+    """Finalise a starter: rename, apply scale, shade smooth.
+
+    subsurf_levels defaults to 0. Earlier versions added a level-1 Subsurf
+    to Bust/Humanoid so the joined sphere primitives appeared visually
+    fused, but that was deceptive — the primitives stay separate inside
+    the joined mesh until Start Sculpt's voxel_remesh fuses them, and
+    sculpting on a Subsurf-smoothed-but-not-fused mesh produced broken
+    brush behaviour at primitive boundaries. The honest visual is now
+    "starter is a cluster of spheres until you click Start Sculpt".
+    """
     obj.name = name
     obj.data.name = name
     bpy.context.view_layer.objects.active = obj

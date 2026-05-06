@@ -53,7 +53,14 @@ def _get_or_create_image(name: str, size: int, colorspace: str, default_color):
     return img
 
 
-def _ensure_bake_material(low_obj, mat_name="PipeSculpt_Bake_Mat"):
+def _ensure_bake_material(low_obj):
+    """Get or create a per-mesh bake material.
+
+    Per-mesh naming (was a global 'PipeSculpt_Bake_Mat') so each baked
+    low-poly keeps its own active texture node — multiple baked characters
+    in one .blend don't stomp on each other's viewport-render preview.
+    """
+    mat_name = f"{low_obj.name}_BakeMat"
     mat = bpy.data.materials.get(mat_name)
     if mat is None:
         mat = bpy.data.materials.new(mat_name)
@@ -144,28 +151,38 @@ def _max_bbox_dim(obj) -> float:
     return max(dims.x, dims.y, dims.z, 0.001)
 
 
-def _ensure_uvs(low_obj, context):
+def _ensure_uvs(low_obj, context, bake_resolution: int):
+    """Smart-project UVs if missing, with margin scaled to bake resolution.
+
+    Industry-standard bake-bleed protection is ~8 pixels constant. Smart
+    Project's island_margin is in 0..1 UV space, so 8 / resolution gives
+    the right pixel margin regardless of 1K/2K/4K/8K target.
+    """
     if low_obj.data.uv_layers:
         return
+    margin = 8.0 / max(bake_resolution, 64)
     bpy.ops.object.select_all(action='DESELECT')
     low_obj.select_set(True)
     context.view_layer.objects.active = low_obj
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.uv.smart_project(angle_limit=66.0, island_margin=0.005)
+    bpy.ops.uv.smart_project(angle_limit=66.0, island_margin=margin)
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
 def _setup_selection_for_bake(context, high, low):
+    """Snapshot the prior hide state of both objects so we can restore later."""
     bpy.ops.object.select_all(action='DESELECT')
     high_was_hidden = high.hide_get()
+    low_was_hidden = low.hide_get()
     if high_was_hidden:
         high.hide_set(False)
+    if low_was_hidden:
+        low.hide_set(False)
     high.select_set(True)
-    low.hide_set(False)
     low.select_set(True)
     context.view_layer.objects.active = low
-    return high_was_hidden
+    return high_was_hidden, low_was_hidden
 
 
 class PIPESCULPT_OT_bake_maps(Operator):
@@ -282,20 +299,24 @@ class PIPESCULPT_OT_bake_maps(Operator):
             )
             return {'CANCELLED'}
 
-        # Multi-slot meshes only get bake output on faces using PipeSculpt_Bake_Mat;
+        # Multi-slot meshes only get bake output on faces using the bake mat;
         # other slots receive nothing. Warn so the user can fix or accept.
-        existing_slots = [s for s in low.data.materials if s is not None]
-        if len(existing_slots) > 0:
+        bake_mat_name = f"{low.name}_BakeMat"
+        non_bake_slots = [
+            s for s in low.data.materials if s is not None and s.name != bake_mat_name
+        ]
+        if non_bake_slots:
             self.report(
                 {'WARNING'},
-                f"'{low.name}' has {len(existing_slots)} existing material slot(s). "
-                "Bake will only write to faces using PipeSculpt_Bake_Mat",
+                f"'{low.name}' has {len(non_bake_slots)} non-bake material slot(s). "
+                f"Bake will only write to faces using '{bake_mat_name}'",
             )
 
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        _ensure_uvs(low, context)
+        size = int(self.resolution)
+        _ensure_uvs(low, context, size)
         mat = _ensure_bake_material(low)
 
         scene = context.scene
@@ -307,7 +328,6 @@ class PIPESCULPT_OT_bake_maps(Operator):
         ray_dist = max_dim * 0.05
         cage_ext = max_dim * 0.01
 
-        size = int(self.resolution)
         passes_to_run = [
             spec for spec in BAKE_PASS_SPECS
             if (spec[0] == 'NORMAL' and self.bake_normal)
@@ -323,7 +343,7 @@ class PIPESCULPT_OT_bake_maps(Operator):
                 self.report({'WARNING'}, f"Cage build failed, falling back to extrusion only: {e}")
                 cage_obj = None
 
-        high_was_hidden = _setup_selection_for_bake(context, high, low)
+        high_was_hidden, low_was_hidden = _setup_selection_for_bake(context, high, low)
 
         baked = []
         for pass_id, suffix, colorspace, default_color, _desc in passes_to_run:
@@ -339,6 +359,8 @@ class PIPESCULPT_OT_bake_maps(Operator):
         scene.cycles.samples = prior_samples
         if high_was_hidden:
             high.hide_set(True)
+        if low_was_hidden:
+            low.hide_set(True)
         if cage_obj is not None:
             cage_data = cage_obj.data
             bpy.data.objects.remove(cage_obj, do_unlink=True)

@@ -75,18 +75,22 @@ class PIPESCULPT_OT_workflow_start(Operator):
         ts.use_symmetry_y = preset.use_symmetry_y
         ts.use_symmetry_z = preset.use_symmetry_z
 
+        remesh_ran = False
         if not bpy.app.background:
             try:
                 rigging.smart_voxel_remesh(obj)
+                remesh_ran = True
             except RuntimeError as e:
                 self.report({'WARNING'}, f"Initial voxel remesh failed: {e}")
 
-        # Voxel remesh has baked the starter's subsurf-smoothed shape into mesh
-        # data. A leftover Subsurf modifier would double-detail the sculpt base
-        # and inflate Add Detail multires levels.
-        for m in list(obj.modifiers):
-            if m.type == 'SUBSURF':
-                obj.modifiers.remove(m)
+        # Only strip Subsurf if voxel_remesh actually ran — otherwise we'd
+        # leave the starter as raw low-poly geometry without the smoothing
+        # the user expected. Background mode (tests) skips voxel_remesh and
+        # therefore must keep Subsurf intact.
+        if remesh_ran:
+            for m in list(obj.modifiers):
+                if m.type == 'SUBSURF':
+                    obj.modifiers.remove(m)
 
         self.report(
             {'INFO'},
