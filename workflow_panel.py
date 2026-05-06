@@ -31,6 +31,14 @@ class SCULPTKIT_PT_workflow(Panel):
         layout.separator()
         col = layout.column(align=True)
         col.scale_y = 1.4
+        col.label(text="Manual Retopo", icon='MESH_GRID')
+        col.operator("sculpt_kit.retopo_manual_setup", icon='MOD_SHRINKWRAP')
+        col.operator("sculpt_kit.retopo_relax", icon='BRUSHES_ALL')
+        col.operator("sculpt_kit.retopo_manual_finish", icon='CHECKMARK')
+
+        layout.separator()
+        col = layout.column(align=True)
+        col.scale_y = 1.4
         col.label(text="Genesis-Tracked Rigging", icon='ARMATURE_DATA')
         col.operator("sculpt_kit.generate_rig", icon='OUTLINER_OB_ARMATURE')
 
