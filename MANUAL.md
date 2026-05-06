@@ -185,6 +185,93 @@ mekaniske former).
 
 ---
 
+## 8b. UV & Paint (mellem Retopo og Generate Rig)
+
+Når du har en low-poly mesh fra Retopo, skal du UV-mappe den før du kan
+texture-painte eller bake. PipeSculpt har et fuldt UV/Paint-modul der
+gør det med få klik.
+
+### Hvad er UV mapping?
+
+UV mapping er processen hvor 3D-overfladen "udfoldes" til et flat 2D-billede.
+Hver vertex får en (U, V)-koordinat i [0, 1]² rummet, som bestemmer hvilken
+del af texturen der vises på den vertex.
+
+Dårlig UV = strækket eller fordrejet texture. God UV = jævn texel-tæthed,
+få seams, hele texture-arealet udnyttet.
+
+### Smart Unwrap
+
+Klik **Smart Unwrap** i panel'ets UV & Paint-sektion.
+
+Den bruger din valgte preset:
+- **Character / Bust** — milde seams (kun >50° edges), Angle-Based unwrap
+- **Prop** — Smart UV Project (ingen seam-marking nødvendig)
+- Andre — Hardsurface mode (aggressive seams >20°)
+
+Output: alle islands packet, uniform texel-density, margin scaleret til
+target resolution (default 2K).
+
+### Verificer din UV
+
+Klik **Checker** for at se en procedural checker-pattern på din mesh.
+Gode UVs = kvadratiske checkers overalt. Strækkede UVs = strakte
+rektangler. Klik igen for at fjerne checker-materialet.
+
+Klik **Stretch** (kræver UV-editor åben — `Shift+F10` eller "UV Editing"
+workspace) for at toggle stretch-heatmap. Rød = stretched, blå = compressed,
+grøn = god.
+
+### Mirror X (for symmetriske karakterer)
+
+Hvis din karakter er X-symmetrisk, klik **Mirror X**. Det kopierer UVs
+fra +X-halvdelen til -X-halvdelen så begge sider deler UV-rummet —
+texture du maler på venstre side dukker også op på højre.
+
+### Texel Density
+
+Klik **Texel Density** og vælg target px/m (default 1024 = AAA standard).
+Den scaler dine UVs så texture-tæthed matcher.
+
+### Setup Paint Mode
+
+Klik **Setup Paint Mode (Albedo)** for one-click texture-paint setup.
+Den:
+1. Opretter et nyt billede `<mesh>_albedo` (default 2K, sRGB).
+2. Tilføjer det som Image Texture node i et nyt paint-material.
+3. Forbinder det til Principled BSDF's Base Color.
+4. Sætter det som active paint canvas.
+5. Skifter til Texture Paint mode.
+
+Du kan male nu. Brug `Q`/`Shift+Q` pies eller standard texture-paint brushes.
+
+### Setup PBR Channels (for AAA quality)
+
+Klik **Setup PBR Channels** for at oprette alle fire PBR-channels på én gang:
+- **Albedo** (sRGB, 50% grey default)
+- **Normal** (Non-Color, flat tangent normal default)
+- **Roughness** (Non-Color, 50% grey default)
+- **Metallic** (Non-Color, sort default)
+
+Albedo bliver default paint canvas. For at skifte til andre channels:
+Properties → Active Tool & Workspace settings → Texture-tabben → vælg
+billedet du vil male på.
+
+### Save Painted Textures
+
+Vigtigt: **Blender textures lever kun i RAM indtil eksplicit gemt**. Hvis
+du lukker .blend uden at save, mister du paint-arbejde.
+
+Klik **Save Painted Textures** før du lukker. Den scanner alle paint-
+images på din mesh, gemmer dem som PNG til `<blend_dir>/textures/`.
+Rapporterer hvor mange der blev gemt, hvor mange overwrites og hvor mange
+clean ones blev skipped.
+
+> ⚠️ Kræver at `.blend` selv er gemt først — den ved ikke hvor `textures/`
+> skal ligge ellers.
+
+---
+
 ## 9. Trin 6 — Generate Rig (Humanoid / Bust / Head)
 
 Alle tre tagged starters har nu bone-hierarchier. Klik **Generate Rig**:

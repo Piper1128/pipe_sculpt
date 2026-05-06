@@ -68,6 +68,37 @@ Tags are also transferred through Retopo automatically, so you can sculpt →
 retopo → rig in any order. Re-running Generate Rig nukes the prior armature
 and rebuilds — no orphan rigs left behind.
 
+### UV & Paint
+Removes the 5+ click texture-paint setup that loses Blender beginners.
+
+**UV operators:**
+- **Smart Unwrap** — preset-driven (Character / Hardsurface / Prop). Auto-marks
+  sharp edges as seams, runs Angle-Based unwrap (or Smart UV Project for
+  props), averages island scale for uniform texel density, packs with
+  resolution-aware margin.
+- **Auto-Seam by Angle** — slider for the dihedral threshold; marks every
+  edge sharper than that as a seam.
+- **Mirror X** — for X-symmetric meshes: copies UVs from +X half to -X half
+  via KDTree vertex pairing. Both halves overlap in UV space → texture
+  painted on one side appears on both.
+- **UV Checker Toggle** — adds/removes a procedural checker material so
+  beginners can see stretching at a glance. Auto-switches to Material Preview.
+- **Stretch Heatmap Toggle** — flips the UV editor's Display Stretch overlay
+  with a clear hint if no UV editor is open.
+- **Texel Density** — compute or apply px/m. Default 1024 px/m matches AAA
+  character standards.
+
+**Paint operators:**
+- **Setup Paint Mode** — single-channel albedo. Creates `<name>_albedo`
+  image, wires to a per-mesh paint material's BSDF Base Color, sets it as
+  the active canvas, switches to Texture Paint mode.
+- **Setup PBR Channels** — same but for albedo + normal + roughness +
+  metallic, all with correct color spaces (sRGB for albedo, Non-Color for
+  the rest) and BSDF wiring (normals through a Normal Map node for tangent-
+  space reading).
+- **Save Painted Textures** — saves all dirty paint textures on the active
+  mesh to `<blend_dir>/textures/`. Reports save / overwrite / skip counts.
+
 ### Manual retopology helper
 For cases where Quadriflow gives bad topology (faces, hard-surface, mech):
 
@@ -173,9 +204,14 @@ attribution for an inspirational tutorial; no code is copied.
 4. **Retopo** (auto: Quadriflow / Decimate) **or** **Setup Manual Retopo**
    (when auto-retopo gives poor topology) → produces a low-poly with GTR
    tags carried through.
-5. **Generate Rig** (if Humanoid) → armature + IK + initial weights.
-6. **Bake Maps** → PNGs in `<blend_dir>/textures/`.
-7. **Export FBX (Unity)** → drop the FBX + textures into Unity 6.
+5. **UV → Smart Unwrap** → preset-driven UV layout with auto-seaming and
+   pack-islands. Optional: **Mirror X** for symmetric characters,
+   **Checker** to verify stretch, **Texel Density** to set px/m.
+6. **Setup Paint Mode** (or **Setup PBR Channels** for full PBR) → single-
+   click texture paint setup. Paint, then **Save Painted Textures**.
+7. **Generate Rig** (Humanoid/Bust/Quadruped/Bird/Mech) → armature + weights.
+8. **Bake Maps** → PNGs in `<blend_dir>/textures/`.
+9. **Export FBX (Unity)** → drop the FBX + textures into Unity 6.
 
 For a beginner-friendly walkthrough with screenshots-style explanations,
 see [`MANUAL.md`](MANUAL.md).
