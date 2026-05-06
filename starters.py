@@ -66,8 +66,8 @@ def _finalize(obj, name, subsurf_levels=1):
         mod.levels = subsurf_levels
 
 
-class SCULPTKIT_OT_starter_sphere(Operator):
-    bl_idname = "sculpt_kit.starter_sphere"
+class PIPESCULPT_OT_starter_sphere(Operator):
+    bl_idname = "pipe_sculpt.starter_sphere"
     bl_label = "Sphere"
     bl_description = "Add a quad-sphere (cube + tosphere) — uniform topology, no poles, ideal for sculpting"
     bl_options = {'REGISTER', 'UNDO'}
@@ -76,12 +76,12 @@ class SCULPTKIT_OT_starter_sphere(Operator):
         _enter_object_mode(context)
         loc = context.scene.cursor.location.copy()
         obj = _add_quad_sphere(1.0, loc)
-        _finalize(obj, "SculptKit_Sphere", subsurf_levels=0)
+        _finalize(obj, "PipeSculpt_Sphere", subsurf_levels=0)
         return {'FINISHED'}
 
 
-class SCULPTKIT_OT_starter_head(Operator):
-    bl_idname = "sculpt_kit.starter_head"
+class PIPESCULPT_OT_starter_head(Operator):
+    bl_idname = "pipe_sculpt.starter_head"
     bl_label = "Head"
     bl_description = "Add an egg-shaped quad-sphere ready for face sculpting (no UV-sphere poles)"
     bl_options = {'REGISTER', 'UNDO'}
@@ -90,12 +90,12 @@ class SCULPTKIT_OT_starter_head(Operator):
         _enter_object_mode(context)
         loc = context.scene.cursor.location.copy()
         obj = _add_quad_sphere(1.0, loc, scale=(0.85, 0.95, 1.1))
-        _finalize(obj, "SculptKit_Head", subsurf_levels=0)
+        _finalize(obj, "PipeSculpt_Head", subsurf_levels=0)
         return {'FINISHED'}
 
 
-class SCULPTKIT_OT_starter_bust(Operator):
-    bl_idname = "sculpt_kit.starter_bust"
+class PIPESCULPT_OT_starter_bust(Operator):
+    bl_idname = "pipe_sculpt.starter_bust"
     bl_label = "Bust"
     bl_description = "Add a head + neck + shoulder block — voxel remesh fuses them when you Start Sculpt"
     bl_options = {'REGISTER', 'UNDO'}
@@ -109,12 +109,12 @@ class SCULPTKIT_OT_starter_bust(Operator):
         shoulders = _add_sphere(0.32, (cx, cy, cz + 0.10), scale=(1.60, 1.00, 0.80))
 
         _join(head, neck, shoulders)
-        _finalize(head, "SculptKit_Bust")
+        _finalize(head, "PipeSculpt_Bust")
         return {'FINISHED'}
 
 
-class SCULPTKIT_OT_starter_humanoid(Operator):
-    bl_idname = "sculpt_kit.starter_humanoid"
+class PIPESCULPT_OT_starter_humanoid(Operator):
+    bl_idname = "pipe_sculpt.starter_humanoid"
     bl_label = "Humanoid"
     bl_description = "Add a T-posed full-body humanoid block (arms outstretched) — voxel remesh fuses parts when you Start Sculpt; T-pose keeps arms separated from torso"
     bl_options = {'REGISTER', 'UNDO'}
@@ -246,16 +246,16 @@ class SCULPTKIT_OT_starter_humanoid(Operator):
 
         _join(torso, *(p for p in parts if p is not torso))
         rigging.store_bone_metadata(torso, 'HUMANOID')
-        _finalize(torso, "SculptKit_Humanoid")
+        _finalize(torso, "PipeSculpt_Humanoid")
         return {'FINISHED'}
 
 
-class SCULPTKIT_PT_starters(Panel):
-    bl_idname = "SCULPTKIT_PT_starters"
+class PIPESCULPT_PT_starters(Panel):
+    bl_idname = "PIPESCULPT_PT_starters"
     bl_label = "Starter Meshes"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "SculptKit"
+    bl_category = "PipeSculpt"
     bl_order = 0
 
     def draw(self, context):
@@ -263,18 +263,18 @@ class SCULPTKIT_PT_starters(Panel):
         layout.label(text="Adds at 3D cursor location", icon='PIVOT_CURSOR')
         grid = layout.grid_flow(row_major=True, columns=2, even_columns=True, align=True)
         grid.scale_y = 1.3
-        grid.operator("sculpt_kit.starter_sphere", icon='SPHERE')
-        grid.operator("sculpt_kit.starter_head", icon='USER')
-        grid.operator("sculpt_kit.starter_bust", icon='OUTLINER_OB_ARMATURE')
-        grid.operator("sculpt_kit.starter_humanoid", icon='ARMATURE_DATA')
+        grid.operator("pipe_sculpt.starter_sphere", icon='SPHERE')
+        grid.operator("pipe_sculpt.starter_head", icon='USER')
+        grid.operator("pipe_sculpt.starter_bust", icon='OUTLINER_OB_ARMATURE')
+        grid.operator("pipe_sculpt.starter_humanoid", icon='ARMATURE_DATA')
 
 
 _classes = (
-    SCULPTKIT_OT_starter_sphere,
-    SCULPTKIT_OT_starter_head,
-    SCULPTKIT_OT_starter_bust,
-    SCULPTKIT_OT_starter_humanoid,
-    SCULPTKIT_PT_starters,
+    PIPESCULPT_OT_starter_sphere,
+    PIPESCULPT_OT_starter_head,
+    PIPESCULPT_OT_starter_bust,
+    PIPESCULPT_OT_starter_humanoid,
+    PIPESCULPT_PT_starters,
 )
 
 

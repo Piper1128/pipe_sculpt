@@ -1,4 +1,4 @@
-# SculptKit — Manual for nybegyndere
+# PipeSculpt — Manual for nybegyndere
 
 Denne guide forudsætter at du **aldrig har sculptet i Blender før**. Den tager
 dig fra installation til en færdig Unity-klar karakter.
@@ -10,14 +10,14 @@ dig fra installation til en færdig Unity-klar karakter.
 
 ## 1. Installation
 
-1. Hent eller byg `sculpt_kit.zip` (kør `python pack.py` i addon-mappen).
+1. Hent eller byg `pipe_sculpt.zip` (kør `python pack.py` i addon-mappen).
 2. Åbn Blender.
 3. Gå til **Edit → Preferences → Get Extensions → Install from Disk** (klik
    nedpilen øverst til højre i Extensions-vinduet).
-4. Vælg `sculpt_kit.zip`.
-5. Sæt flueben ud for "SculptKit" på listen.
+4. Vælg `pipe_sculpt.zip`.
+5. Sæt flueben ud for "PipeSculpt" på listen.
 
-Du skulle nu se en **"SculptKit"-fane** i N-panelet i 3D Viewport. Hvis du
+Du skulle nu se en **"PipeSculpt"-fane** i N-panelet i 3D Viewport. Hvis du
 ikke kan se N-panelet, tryk `N` mens musen er over viewport.
 
 ---
@@ -30,7 +30,7 @@ ikke kan se N-panelet, tryk `N` mens musen er over viewport.
 | `Mid-mus drag` | Roter view |
 | `Shift + mid-mus drag` | Pan view |
 | `Tab` | Skift mellem Object Mode og Edit/Sculpt |
-| `N` | Vis/skjul side-panel (her ligger SculptKit) |
+| `N` | Vis/skjul side-panel (her ligger PipeSculpt) |
 | `Ctrl+Z` | Fortryd |
 | `Ctrl+S` | Gem fil |
 
@@ -54,13 +54,13 @@ Vælg starter  →  Start Sculpt  →  Sculpt  →  Add Detail  →  Sculpt mere
                                               Export FBX → Unity
 ```
 
-Hver knap findes i **N-panel → SculptKit → Workflow Pipeline**.
+Hver knap findes i **N-panel → PipeSculpt → Workflow Pipeline**.
 
 ---
 
 ## 4. Trin 1 — Vælg en starter
 
-I **N-panel → SculptKit → Starter Meshes** har du 4 knapper:
+I **N-panel → PipeSculpt → Starter Meshes** har du 4 knapper:
 
 - **Sphere** — generisk start. Bruges til abstrakte former, idéskitser.
 - **Head** — æg-formet sphere, rated til ansigts-sculpt.
@@ -267,7 +267,7 @@ Hook
        Draw Sharp + 4 ydre slots
 ```
 
-Slots kan customizes i **Edit → Preferences → Add-ons → SculptKit → Brush
+Slots kan customizes i **Edit → Preferences → Add-ons → PipeSculpt → Brush
 Slots**. Skriv brush-asset navnet (fx "Clay Strips") i et slot for at
 binde det.
 
@@ -324,11 +324,11 @@ Disse er ikke bugs men ting der ikke understøttes endnu:
 
 ## Hvor er filerne?
 
-- **Addon-kode:** `C:\Users\Piper\BlenderAddons\sculpt_kit\` (Windows)
+- **Addon-kode:** `C:\Users\Piper\BlenderAddons\pipe_sculpt\` (Windows)
 - **Bake-output:** `<din-blend-fil>/textures/`
 - **FBX-output:** dér du vælger i export-dialog
 - **Build-script:** `pack.py` (kør for at lave install-zip)
-- **Brush-presets:** `Edit → Preferences → Add-ons → SculptKit`
+- **Brush-presets:** `Edit → Preferences → Add-ons → PipeSculpt`
 
 ---
 

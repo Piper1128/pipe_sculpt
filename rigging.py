@@ -14,9 +14,9 @@ import mathutils
 from bpy.types import Operator
 
 
-VERTEX_ATTR = "sculpt_kit_bone"
-META_PROP = "sculpt_kit_bone_data"
-RIG_TYPE_PROP = "sculpt_kit_rig_type"
+VERTEX_ATTR = "pipe_sculpt_bone"
+META_PROP = "pipe_sculpt_bone_data"
+RIG_TYPE_PROP = "pipe_sculpt_rig_type"
 
 
 FINGER_NAMES: tuple[str, ...] = ("thumb", "index", "middle", "ring", "pinky")
@@ -322,8 +322,8 @@ def transfer_bone_tags_from_high(high_obj, low_obj) -> bool:
     return True
 
 
-class SCULPTKIT_OT_generate_rig(Operator):
-    bl_idname = "sculpt_kit.generate_rig"
+class PIPESCULPT_OT_generate_rig(Operator):
+    bl_idname = "pipe_sculpt.generate_rig"
     bl_label = "Generate Rig"
     bl_description = (
         "Build an armature, IK setup, and initial skin weights from preserved "
@@ -473,7 +473,7 @@ class SCULPTKIT_OT_generate_rig(Operator):
         return {'FINISHED'}
 
 
-_classes = (SCULPTKIT_OT_generate_rig,)
+_classes = (PIPESCULPT_OT_generate_rig,)
 
 
 def register():

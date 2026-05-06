@@ -21,9 +21,9 @@ def register():
     km = kc.keymaps.new(name="Sculpt", space_type='EMPTY')
 
     _add(km, "wm.call_menu_pie", 'Q',
-         properties={"name": "SCULPTKIT_MT_pie_primary"})
+         properties={"name": "PIPESCULPT_MT_pie_primary"})
     _add(km, "wm.call_menu_pie", 'Q', shift=True,
-         properties={"name": "SCULPTKIT_MT_pie_secondary"})
+         properties={"name": "PIPESCULPT_MT_pie_secondary"})
 
 
 def unregister():

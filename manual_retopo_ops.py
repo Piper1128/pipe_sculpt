@@ -32,8 +32,8 @@ from . import rigging
 
 
 RETOPO_NAME_SUFFIX = "_retopo_manual"
-MIRROR_MOD_NAME = "SculptKit Mirror"
-SHRINKWRAP_MOD_NAME = "SculptKit Shrinkwrap"
+MIRROR_MOD_NAME = "PipeSculpt Mirror"
+SHRINKWRAP_MOD_NAME = "PipeSculpt Shrinkwrap"
 
 
 def _find_3d_view_space(context):
@@ -122,8 +122,8 @@ def _lock_high_poly(high):
     high.hide_select = True
 
 
-class SCULPTKIT_OT_retopo_manual_setup(Operator):
-    bl_idname = "sculpt_kit.retopo_manual_setup"
+class PIPESCULPT_OT_retopo_manual_setup(Operator):
+    bl_idname = "pipe_sculpt.retopo_manual_setup"
     bl_label = "Setup Manual Retopo"
     bl_description = (
         "Configure the scene for manual retopology on the active high-poly. "
@@ -192,8 +192,8 @@ class SCULPTKIT_OT_retopo_manual_setup(Operator):
         return {'FINISHED'}
 
 
-class SCULPTKIT_OT_retopo_manual_finish(Operator):
-    bl_idname = "sculpt_kit.retopo_manual_finish"
+class PIPESCULPT_OT_retopo_manual_finish(Operator):
+    bl_idname = "pipe_sculpt.retopo_manual_finish"
     bl_label = "Finish Manual Retopo"
     bl_description = (
         "Apply Mirror + Shrinkwrap on the active retopo mesh, transfer GTR bone "
@@ -258,8 +258,8 @@ class SCULPTKIT_OT_retopo_manual_finish(Operator):
         return {'FINISHED'}
 
 
-class SCULPTKIT_OT_retopo_relax(Operator):
-    bl_idname = "sculpt_kit.retopo_relax"
+class PIPESCULPT_OT_retopo_relax(Operator):
+    bl_idname = "pipe_sculpt.retopo_relax"
     bl_label = "Relax Geometry"
     bl_description = (
         "Switch the active retopo mesh into Sculpt Mode with the Relax Slide "
@@ -313,9 +313,9 @@ class SCULPTKIT_OT_retopo_relax(Operator):
 
 
 _classes = (
-    SCULPTKIT_OT_retopo_manual_setup,
-    SCULPTKIT_OT_retopo_manual_finish,
-    SCULPTKIT_OT_retopo_relax,
+    PIPESCULPT_OT_retopo_manual_setup,
+    PIPESCULPT_OT_retopo_manual_finish,
+    PIPESCULPT_OT_retopo_relax,
 )
 
 

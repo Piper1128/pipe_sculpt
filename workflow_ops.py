@@ -18,7 +18,7 @@ def _max_bbox_dim(obj) -> float:
 
 
 def _selected_preset(context) -> presets_mod.Preset:
-    pid = context.scene.sculpt_kit_preset
+    pid = context.scene.pipe_sculpt_preset
     return presets_mod.PRESETS_BY_ID.get(pid, presets_mod.PRESETS_BY_ID[presets_mod.DEFAULT_PRESET_ID])
 
 
@@ -29,8 +29,8 @@ def _target_faces(context, preset: presets_mod.Preset) -> int:
     return preset.target_faces_default
 
 
-class SCULPTKIT_OT_workflow_start(Operator):
-    bl_idname = "sculpt_kit.workflow_start"
+class PIPESCULPT_OT_workflow_start(Operator):
+    bl_idname = "pipe_sculpt.workflow_start"
     bl_label = "Start Sculpt"
     bl_description = "Enter sculpt mode, set voxel size from bbox, apply symmetry, and run an initial voxel remesh"
     bl_options = {'REGISTER', 'UNDO'}
@@ -83,8 +83,8 @@ class SCULPTKIT_OT_workflow_start(Operator):
         return {'FINISHED'}
 
 
-class SCULPTKIT_OT_workflow_add_detail(Operator):
-    bl_idname = "sculpt_kit.workflow_add_detail"
+class PIPESCULPT_OT_workflow_add_detail(Operator):
+    bl_idname = "pipe_sculpt.workflow_add_detail"
     bl_label = "Add Detail"
     bl_description = "Step the multires modifier up by one level, toward the preset's target"
     bl_options = {'REGISTER', 'UNDO'}
@@ -105,7 +105,7 @@ class SCULPTKIT_OT_workflow_add_detail(Operator):
 
         mod = next((m for m in obj.modifiers if m.type == 'MULTIRES'), None)
         if mod is None:
-            mod = obj.modifiers.new(name="SculptKit Multires", type='MULTIRES')
+            mod = obj.modifiers.new(name="PipeSculpt Multires", type='MULTIRES')
 
         if mod.total_levels >= target_levels:
             self.report({'INFO'}, f"Already at preset target level {target_levels}")
@@ -127,8 +127,8 @@ class SCULPTKIT_OT_workflow_add_detail(Operator):
         return {'FINISHED'}
 
 
-class SCULPTKIT_OT_workflow_retopo(Operator):
-    bl_idname = "sculpt_kit.workflow_retopo"
+class PIPESCULPT_OT_workflow_retopo(Operator):
+    bl_idname = "pipe_sculpt.workflow_retopo"
     bl_label = "Retopo"
     bl_description = "Duplicate the active mesh and run retopology (quadriflow or decimate) with the preset's target face count"
     bl_options = {'REGISTER', 'UNDO'}
@@ -154,7 +154,7 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
         if current_faces == 0:
             return False, "Source mesh has no faces"
         ratio = max(0.0001, min(1.0, target_faces / current_faces))
-        mod = retopo.modifiers.new(name="SculptKit Decimate", type='DECIMATE')
+        mod = retopo.modifiers.new(name="PipeSculpt Decimate", type='DECIMATE')
         mod.decimate_type = 'COLLAPSE'
         mod.ratio = ratio
         mod.use_collapse_triangulate = True
@@ -242,9 +242,9 @@ class SCULPTKIT_OT_workflow_retopo(Operator):
 
 
 _classes = (
-    SCULPTKIT_OT_workflow_start,
-    SCULPTKIT_OT_workflow_add_detail,
-    SCULPTKIT_OT_workflow_retopo,
+    PIPESCULPT_OT_workflow_start,
+    PIPESCULPT_OT_workflow_add_detail,
+    PIPESCULPT_OT_workflow_retopo,
 )
 
 

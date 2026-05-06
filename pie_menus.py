@@ -5,8 +5,8 @@ from bpy.types import Menu, Operator
 from . import preferences as prefs_mod
 
 
-class SCULPTKIT_OT_activate_brush(Operator):
-    bl_idname = "sculpt_kit.activate_brush"
+class PIPESCULPT_OT_activate_brush(Operator):
+    bl_idname = "pipe_sculpt.activate_brush"
     bl_label = "Activate Brush"
     bl_description = "Activate the named brush from Blender's Essentials sculpt brush library"
     bl_options = {'INTERNAL'}
@@ -53,22 +53,22 @@ def _draw_pie(layout, slots):
     pie = layout.menu_pie()
     for slot in slots:
         label = slot.name if slot.name else "—"
-        op = pie.operator("sculpt_kit.activate_brush", text=label)
+        op = pie.operator("pipe_sculpt.activate_brush", text=label)
         op.asset_name = slot.name
 
 
-class SCULPTKIT_MT_pie_primary(Menu):
-    bl_idname = "SCULPTKIT_MT_pie_primary"
-    bl_label = "SculptKit — Primary"
+class PIPESCULPT_MT_pie_primary(Menu):
+    bl_idname = "PIPESCULPT_MT_pie_primary"
+    bl_label = "PipeSculpt — Primary"
 
     def draw(self, context):
         prefs = prefs_mod.get_prefs(context)
         _draw_pie(self.layout, prefs.primary_slots)
 
 
-class SCULPTKIT_MT_pie_secondary(Menu):
-    bl_idname = "SCULPTKIT_MT_pie_secondary"
-    bl_label = "SculptKit — Secondary"
+class PIPESCULPT_MT_pie_secondary(Menu):
+    bl_idname = "PIPESCULPT_MT_pie_secondary"
+    bl_label = "PipeSculpt — Secondary"
 
     def draw(self, context):
         prefs = prefs_mod.get_prefs(context)
@@ -76,9 +76,9 @@ class SCULPTKIT_MT_pie_secondary(Menu):
 
 
 _classes = (
-    SCULPTKIT_OT_activate_brush,
-    SCULPTKIT_MT_pie_primary,
-    SCULPTKIT_MT_pie_secondary,
+    PIPESCULPT_OT_activate_brush,
+    PIPESCULPT_MT_pie_primary,
+    PIPESCULPT_MT_pie_secondary,
 )
 
 

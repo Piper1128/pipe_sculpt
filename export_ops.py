@@ -59,7 +59,7 @@ def _ensure_triangulated(mesh_obj):
     )
     if existing is not None:
         return existing
-    mod = mesh_obj.modifiers.new(name="SculptKit Triangulate", type='TRIANGULATE')
+    mod = mesh_obj.modifiers.new(name="PipeSculpt Triangulate", type='TRIANGULATE')
     mod.quad_method = 'BEAUTY'
     mod.ngon_method = 'BEAUTY'
     mod.keep_custom_normals = True
@@ -72,8 +72,8 @@ def _default_export_path(blend_path):
     return ""
 
 
-class SCULPTKIT_OT_export_unity_fbx(Operator, ExportHelper):
-    bl_idname = "sculpt_kit.export_unity_fbx"
+class PIPESCULPT_OT_export_unity_fbx(Operator, ExportHelper):
+    bl_idname = "pipe_sculpt.export_unity_fbx"
     bl_label = "Export FBX (Unity)"
     bl_description = (
         "Export the active mesh + its armature as an FBX with Unity 6 importer "
@@ -141,7 +141,7 @@ class SCULPTKIT_OT_export_unity_fbx(Operator, ExportHelper):
             for o in targets:
                 if o.type == 'MESH':
                     mod = _ensure_triangulated(o)
-                    if mod.name == "SculptKit Triangulate":
+                    if mod.name == "PipeSculpt Triangulate":
                         added_modifiers.append((o, mod.name))
 
         # Re-select target set (FBX exporter respects use_selection)
@@ -198,7 +198,7 @@ class SCULPTKIT_OT_export_unity_fbx(Operator, ExportHelper):
         return {'FINISHED'}
 
 
-_classes = (SCULPTKIT_OT_export_unity_fbx,)
+_classes = (PIPESCULPT_OT_export_unity_fbx,)
 
 
 def register():

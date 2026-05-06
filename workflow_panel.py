@@ -5,15 +5,15 @@ from bpy.types import Panel
 from . import workflow_presets as presets_mod
 
 
-_SCENE_PROP = "sculpt_kit_preset"
+_SCENE_PROP = "pipe_sculpt_preset"
 
 
-class SCULPTKIT_PT_workflow(Panel):
-    bl_idname = "SCULPTKIT_PT_workflow"
+class PIPESCULPT_PT_workflow(Panel):
+    bl_idname = "PIPESCULPT_PT_workflow"
     bl_label = "Workflow Pipeline"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "SculptKit"
+    bl_category = "PipeSculpt"
     bl_order = 10
 
     def draw(self, context):
@@ -23,33 +23,33 @@ class SCULPTKIT_PT_workflow(Panel):
 
         col = layout.column(align=True)
         col.scale_y = 1.4
-        col.operator("sculpt_kit.workflow_start", icon='SCULPTMODE_HLT')
-        col.operator("sculpt_kit.workflow_add_detail", icon='MOD_MULTIRES')
-        col.operator("sculpt_kit.workflow_retopo", icon='MOD_REMESH')
-        col.operator("sculpt_kit.bake_maps", icon='RENDER_STILL')
+        col.operator("pipe_sculpt.workflow_start", icon='SCULPTMODE_HLT')
+        col.operator("pipe_sculpt.workflow_add_detail", icon='MOD_MULTIRES')
+        col.operator("pipe_sculpt.workflow_retopo", icon='MOD_REMESH')
+        col.operator("pipe_sculpt.bake_maps", icon='RENDER_STILL')
 
         layout.separator()
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.label(text="Manual Retopo", icon='MESH_GRID')
-        col.operator("sculpt_kit.retopo_manual_setup", icon='MOD_SHRINKWRAP')
-        col.operator("sculpt_kit.retopo_relax", icon='BRUSHES_ALL')
-        col.operator("sculpt_kit.retopo_manual_finish", icon='CHECKMARK')
+        col.operator("pipe_sculpt.retopo_manual_setup", icon='MOD_SHRINKWRAP')
+        col.operator("pipe_sculpt.retopo_relax", icon='BRUSHES_ALL')
+        col.operator("pipe_sculpt.retopo_manual_finish", icon='CHECKMARK')
 
         layout.separator()
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.label(text="Genesis-Tracked Rigging", icon='ARMATURE_DATA')
-        col.operator("sculpt_kit.generate_rig", icon='OUTLINER_OB_ARMATURE')
+        col.operator("pipe_sculpt.generate_rig", icon='OUTLINER_OB_ARMATURE')
 
         layout.separator()
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.label(text="Export", icon='EXPORT')
-        col.operator("sculpt_kit.export_unity_fbx", icon='OUTLINER_OB_MESH')
+        col.operator("pipe_sculpt.export_unity_fbx", icon='OUTLINER_OB_MESH')
 
 
-_classes = (SCULPTKIT_PT_workflow,)
+_classes = (PIPESCULPT_PT_workflow,)
 
 
 def register():
@@ -57,7 +57,7 @@ def register():
         bpy.types.Scene,
         _SCENE_PROP,
         EnumProperty(
-            name="SculptKit Preset",
+            name="PipeSculpt Preset",
             description="Workflow preset for sculpting and retopology",
             items=presets_mod.preset_enum_items(),
             default=presets_mod.DEFAULT_PRESET_ID,

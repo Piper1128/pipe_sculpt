@@ -42,7 +42,7 @@ SECONDARY_DEFAULTS = (
 )
 
 
-class SCULPTKIT_PG_pie_slot(PropertyGroup):
+class PIPESCULPT_PG_pie_slot(PropertyGroup):
     name: StringProperty(
         name="Brush Asset Name",
         description="Name of the brush asset inside the essentials brush library",
@@ -50,10 +50,10 @@ class SCULPTKIT_PG_pie_slot(PropertyGroup):
     )
 
 
-class SCULPTKIT_OT_reset_slots(Operator):
-    bl_idname = "sculpt_kit.reset_slots"
+class PIPESCULPT_OT_reset_slots(Operator):
+    bl_idname = "pipe_sculpt.reset_slots"
     bl_label = "Reset Brush Slots to Defaults"
-    bl_description = "Discard all custom slot names and restore SculptKit's default brush mappings"
+    bl_description = "Discard all custom slot names and restore PipeSculpt's default brush mappings"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -63,12 +63,12 @@ class SCULPTKIT_OT_reset_slots(Operator):
         return {'FINISHED'}
 
 
-class SCULPTKIT_Preferences(AddonPreferences):
+class PIPESCULPT_Preferences(AddonPreferences):
     bl_idname = __package__
 
     defaults_version: IntProperty(default=0)
-    primary_slots: CollectionProperty(type=SCULPTKIT_PG_pie_slot)
-    secondary_slots: CollectionProperty(type=SCULPTKIT_PG_pie_slot)
+    primary_slots: CollectionProperty(type=PIPESCULPT_PG_pie_slot)
+    secondary_slots: CollectionProperty(type=PIPESCULPT_PG_pie_slot)
 
     target_faces_character: IntProperty(
         name="Character",
@@ -167,7 +167,7 @@ class SCULPTKIT_Preferences(AddonPreferences):
         box = layout.box()
         header = box.row(align=True)
         header.label(text=f"Brush Slots (defaults v{self.defaults_version})", icon='BRUSH_DATA')
-        header.operator("sculpt_kit.reset_slots", text="Reset to Defaults", icon='LOOP_BACK')
+        header.operator("pipe_sculpt.reset_slots", text="Reset to Defaults", icon='LOOP_BACK')
 
         sub = box.box()
         sub.label(text="Primary Pie (Q)")
@@ -215,9 +215,9 @@ def get_prefs(context=None):
 
 
 _classes = (
-    SCULPTKIT_PG_pie_slot,
-    SCULPTKIT_OT_reset_slots,
-    SCULPTKIT_Preferences,
+    PIPESCULPT_PG_pie_slot,
+    PIPESCULPT_OT_reset_slots,
+    PIPESCULPT_Preferences,
 )
 
 

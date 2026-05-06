@@ -53,7 +53,7 @@ def _get_or_create_image(name: str, size: int, colorspace: str, default_color):
     return img
 
 
-def _ensure_bake_material(low_obj, mat_name="SculptKit_Bake_Mat"):
+def _ensure_bake_material(low_obj, mat_name="PipeSculpt_Bake_Mat"):
     mat = bpy.data.materials.get(mat_name)
     if mat is None:
         mat = bpy.data.materials.new(mat_name)
@@ -168,8 +168,8 @@ def _setup_selection_for_bake(context, high, low):
     return high_was_hidden
 
 
-class SCULPTKIT_OT_bake_maps(Operator):
-    bl_idname = "sculpt_kit.bake_maps"
+class PIPESCULPT_OT_bake_maps(Operator):
+    bl_idname = "pipe_sculpt.bake_maps"
     bl_label = "Bake Maps"
     bl_description = (
         "Bake normal + AO (+ optional position) maps from the high-poly source to "
@@ -282,14 +282,14 @@ class SCULPTKIT_OT_bake_maps(Operator):
             )
             return {'CANCELLED'}
 
-        # Multi-slot meshes only get bake output on faces using SculptKit_Bake_Mat;
+        # Multi-slot meshes only get bake output on faces using PipeSculpt_Bake_Mat;
         # other slots receive nothing. Warn so the user can fix or accept.
         existing_slots = [s for s in low.data.materials if s is not None]
         if len(existing_slots) > 0:
             self.report(
                 {'WARNING'},
                 f"'{low.name}' has {len(existing_slots)} existing material slot(s). "
-                "Bake will only write to faces using SculptKit_Bake_Mat",
+                "Bake will only write to faces using PipeSculpt_Bake_Mat",
             )
 
         if context.mode != 'OBJECT':
@@ -353,7 +353,7 @@ class SCULPTKIT_OT_bake_maps(Operator):
         return {'FINISHED'}
 
 
-_classes = (SCULPTKIT_OT_bake_maps,)
+_classes = (PIPESCULPT_OT_bake_maps,)
 
 
 def register():

@@ -1,4 +1,4 @@
-# SculptKit
+# PipeSculpt
 
 A Blender 5.x addon that turns the sculpt-to-Unity pipeline into a few clicks.
 Pie menus for brushes, preset-driven workflow, Genesis-Tracked Rigging, manual
@@ -91,10 +91,10 @@ re-triangulate against the bake.
 
 ## Install (Blender 5.0+)
 
-1. Run `python pack.py` to build `sculpt_kit.zip`.
+1. Run `python pack.py` to build `pipe_sculpt.zip`.
 2. Blender → Edit → Preferences → Get Extensions → Install from Disk → pick
    the zip.
-3. Enable "SculptKit".
+3. Enable "PipeSculpt".
 
 For development, drop the folder into
 `<blender_user_dir>/extensions/user_default/` and restart Blender.
@@ -110,10 +110,10 @@ yet — use **Baked** for verified output.
 ## License & legal
 
 Licensed under **GPL-3.0-or-later** (see [`LICENSE`](LICENSE)) to match Blender's
-own license. You may use, modify, and redistribute SculptKit under those terms.
+own license. You may use, modify, and redistribute PipeSculpt under those terms.
 
-The name "SculptKit" is also used by an unrelated Unity Asset Store product;
-SculptKit (this addon) is not affiliated with that or any other product. If
+The name "PipeSculpt" is also used by an unrelated Unity Asset Store product;
+PipeSculpt (this addon) is not affiliated with that or any other product. If
 you fork and publish, consider renaming to avoid confusion.
 
 References to *Blender*, *Unity 6*, and *FBX* are nominative use under their
@@ -130,7 +130,7 @@ attribution for an inspirational tutorial; no code is copied.
 - Initial voxel remesh is skipped in `bpy.app.background` mode (sculpt
   undo stack isn't initialised without UI).
 - Multi-slot low-poly meshes only get bake output on faces using
-  `SculptKit_Bake_Mat` — the bake operator warns when this happens.
+  `PipeSculpt_Bake_Mat` — the bake operator warns when this happens.
 - Curvature is not baked: Cycles has no native pass and Substance Painter
   generates a better one client-side from the baked normal.
 

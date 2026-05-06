@@ -1,5 +1,5 @@
 """
-Build sculpt_kit.zip for Blender extension install.
+Build pipe_sculpt.zip for Blender extension install.
 
 Run with any Python 3.11+:
     python pack.py
