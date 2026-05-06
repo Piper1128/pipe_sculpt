@@ -400,11 +400,225 @@ class PIPESCULPT_OT_uv_stretch_toggle(Operator):
         return {'FINISHED'}
 
 
+class PIPESCULPT_OT_uv_symmetry_mirror(Operator):
+    bl_idname = "pipe_sculpt.uv_symmetry_mirror"
+    bl_label = "Mirror UVs across X"
+    bl_description = (
+        "For X-symmetric meshes: copy UV coordinates from the +X half to the "
+        "-X half so both halves share the same UV space. Texture painted on "
+        "one side appears on both. Requires verts on the centerline (X≈0)"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    epsilon: FloatProperty(
+        name="Symmetry Tolerance",
+        description=(
+            "Maximum world-space distance considered the 'mirror match' for a "
+            "vertex. Increase if your mesh isn't perfectly symmetric"
+        ),
+        default=0.001,
+        min=1e-6,
+        max=0.1,
+        precision=4,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        obj = _active_mesh(context)
+        return obj is not None and bool(obj.data.uv_layers)
+
+    def execute(self, context):
+        import mathutils
+
+        obj = _active_mesh(context)
+        prior_mode = context.mode
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        mesh = obj.data
+        uv_layer = mesh.uv_layers.active
+        if uv_layer is None:
+            self.report({'ERROR'}, "Mesh has no active UV layer")
+            return {'CANCELLED'}
+
+        # Build KDTree of vertex positions on +X side, then for each -X vertex
+        # find its mirror, and copy UVs loop-by-loop. Loops are per-corner so
+        # we have to map vertices → loops on each side.
+        positive_verts = [v for v in mesh.vertices if v.co.x > self.epsilon]
+        negative_verts = [v for v in mesh.vertices if v.co.x < -self.epsilon]
+        if not positive_verts or not negative_verts:
+            self.report({'WARNING'}, "Mesh isn't X-symmetric (one side has no verts)")
+            return {'CANCELLED'}
+
+        kd = mathutils.kdtree.KDTree(len(positive_verts))
+        for i, v in enumerate(positive_verts):
+            kd.insert(v.co, i)
+        kd.balance()
+
+        # Loop indices grouped by vertex
+        v_to_loops: dict = {}
+        for poly in mesh.polygons:
+            for li in poly.loop_indices:
+                vi = mesh.loops[li].vertex_index
+                v_to_loops.setdefault(vi, []).append(li)
+
+        copied = 0
+        for v_neg in negative_verts:
+            # Mirror neg → pos by flipping X
+            mirror_target = mathutils.Vector((-v_neg.co.x, v_neg.co.y, v_neg.co.z))
+            _, src_kd_idx, dist = kd.find(mirror_target)
+            if src_kd_idx is None or dist > self.epsilon * 2:
+                continue
+            v_pos = positive_verts[src_kd_idx]
+            # Copy each loop UV from a source loop on v_pos to a loop on v_neg.
+            # Vertices can have multiple loops (one per face corner) — we just
+            # pair them in order. UV islands sharing the same vert get the same
+            # mirrored UV, which is what we want for symmetric layouts.
+            src_loops = v_to_loops.get(v_pos.index, [])
+            dst_loops = v_to_loops.get(v_neg.index, [])
+            for src_li, dst_li in zip(src_loops, dst_loops):
+                src_uv = uv_layer.data[src_li].uv
+                # Mirror in U axis around 0.5 so the mirrored island sits in
+                # the same place as the source — both halves overlap.
+                uv_layer.data[dst_li].uv = (1.0 - src_uv.x, src_uv.y)
+                copied += 1
+
+        mesh.update()
+        if prior_mode == 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='EDIT')
+
+        self.report(
+            {'INFO'},
+            f"Mirrored UVs on {len(negative_verts)} -X verts ({copied} loops); "
+            "+X and -X halves now share UV space",
+        )
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_uv_texel_density(Operator):
+    bl_idname = "pipe_sculpt.uv_texel_density"
+    bl_label = "Set Texel Density"
+    bl_description = (
+        "Compute the current average texel density and optionally scale UVs "
+        "to match a target. Texel density = pixels per metre of mesh surface. "
+        "Higher = sharper textures, more memory; AAA targets 512-1024 px/m"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    target_density: FloatProperty(
+        name="Target Density (px/m)",
+        description="Pixels per metre of mesh surface",
+        default=1024.0,
+        min=1.0,
+        max=10000.0,
+    )
+    target_resolution: IntProperty(
+        name="Texture Resolution",
+        description="Texture dimension in pixels (assumes square)",
+        default=2048,
+        min=64,
+        max=8192,
+    )
+    apply_scale: bpy.props.BoolProperty(
+        name="Apply Scale",
+        description="If on, scale UVs to match target. If off, only report current density",
+        default=True,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        obj = _active_mesh(context)
+        return obj is not None and bool(obj.data.uv_layers)
+
+    def _compute_density(self, obj, resolution: int) -> tuple[float, float, float]:
+        """Returns (mesh_area_m2, uv_area_unit_sq, density_px_per_m).
+
+        UV area is in [0,1]² space. Mesh area is in world-space metres².
+        Density = sqrt(uv_area * res²) / sqrt(mesh_area).
+        """
+        import math
+
+        mesh = obj.data
+        uv_layer = mesh.uv_layers.active
+
+        # Mesh area in world space (factoring obj.scale)
+        scale_factor = (obj.scale.x * obj.scale.y * obj.scale.z) ** (1.0 / 3.0)
+        mesh_area = sum(p.area for p in mesh.polygons) * scale_factor * scale_factor
+
+        # UV area: triangulate each polygon's UV loop and sum
+        uv_area = 0.0
+        for poly in mesh.polygons:
+            li_first = poly.loop_start
+            n = poly.loop_total
+            if n < 3:
+                continue
+            uv0 = uv_layer.data[li_first].uv
+            for k in range(1, n - 1):
+                uv1 = uv_layer.data[li_first + k].uv
+                uv2 = uv_layer.data[li_first + k + 1].uv
+                # Triangle area = 0.5 * |cross|
+                cross = (uv1.x - uv0.x) * (uv2.y - uv0.y) - (uv2.x - uv0.x) * (uv1.y - uv0.y)
+                uv_area += abs(cross) * 0.5
+
+        if mesh_area < 1e-9 or uv_area < 1e-9:
+            return mesh_area, uv_area, 0.0
+
+        # density (px/m): sqrt(uv_area_in_pixels²) / sqrt(mesh_area_in_m²)
+        density = math.sqrt(uv_area * resolution * resolution) / math.sqrt(mesh_area)
+        return mesh_area, uv_area, density
+
+    def execute(self, context):
+        obj = _active_mesh(context)
+        prior_mode = context.mode
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        mesh_area, uv_area, current_density = self._compute_density(
+            obj, self.target_resolution
+        )
+        if current_density <= 0:
+            self.report(
+                {'ERROR'},
+                "Could not compute density (mesh or UV area too small)",
+            )
+            return {'CANCELLED'}
+
+        if not self.apply_scale:
+            self.report(
+                {'INFO'},
+                f"Current density: {current_density:.1f} px/m "
+                f"(mesh {mesh_area:.3f} m², UV {uv_area:.3f} unit²) "
+                f"@ {self.target_resolution}px",
+            )
+            return {'FINISHED'}
+
+        scale = self.target_density / current_density
+        uv_layer = obj.data.uv_layers.active
+
+        # Scale around UV centroid so the layout stays centred-ish
+        cx = sum(uv.uv.x for uv in uv_layer.data) / max(1, len(uv_layer.data))
+        cy = sum(uv.uv.y for uv in uv_layer.data) / max(1, len(uv_layer.data))
+        for uv in uv_layer.data:
+            uv.uv = ((uv.uv.x - cx) * scale + cx, (uv.uv.y - cy) * scale + cy)
+
+        if prior_mode == 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='EDIT')
+
+        self.report(
+            {'INFO'},
+            f"Density {current_density:.1f} → {self.target_density:.1f} px/m "
+            f"(scale ×{scale:.3f}). Pack Islands recommended after this",
+        )
+        return {'FINISHED'}
+
+
 _classes = (
     PIPESCULPT_OT_uv_auto_seam,
     PIPESCULPT_OT_uv_smart_unwrap,
     PIPESCULPT_OT_uv_checker_toggle,
     PIPESCULPT_OT_uv_stretch_toggle,
+    PIPESCULPT_OT_uv_symmetry_mirror,
+    PIPESCULPT_OT_uv_texel_density,
 )
 
 
