@@ -294,6 +294,178 @@ class PIPESCULPT_OT_starter_humanoid(Operator):
         return {'FINISHED'}
 
 
+class PIPESCULPT_OT_starter_quadruped(Operator):
+    bl_idname = "pipe_sculpt.starter_quadruped"
+    bl_label = "Quadruped"
+    bl_description = (
+        "Add a four-legged animal block (dog/wolf-like proportions). Voxel "
+        "remesh fuses parts on Start Sculpt; Generate Rig builds 17 bones "
+        "(spine, neck, head, tail, 4 legs × 3 segments)"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        _enter_object_mode(context)
+        cx, cy, cz = context.scene.cursor.location
+        # Mesh origin will land on torso center (cx, cy, cz + 0.50).
+        # All primitive locations use absolute cursor coords.
+        z_body = cz + 0.50  # back center
+
+        # Body — elongated spine block running along Y
+        torso = _add_sphere(0.18, (cx, cy + 0.0, z_body), scale=(1.0, 3.0, 1.0))
+        rigging.tag_primitive(torso, "spine")
+        parts = [torso]
+
+        # Neck + head, sloping up and forward
+        neck = _add_sphere(0.07, (cx, cy + 0.35, z_body + 0.05))
+        rigging.tag_primitive(neck, "neck")
+        parts.append(neck)
+        head = _add_sphere(0.10, (cx, cy + 0.48, z_body + 0.10), scale=(1.0, 1.4, 1.0))
+        rigging.tag_primitive(head, "head")
+        parts.append(head)
+
+        # Tail trailing back-down
+        tail = _add_sphere(0.05, (cx, cy - 0.42, z_body - 0.05), scale=(1.0, 2.5, 1.0))
+        rigging.tag_primitive(tail, "tail")
+        parts.append(tail)
+
+        # Four legs — front pair forward, back pair behind
+        for side, suffix in ((1, "L"), (-1, "R")):
+            x = cx + side * 0.10
+            # Front leg
+            fu = _add_sphere(0.05, (x, cy + 0.30, z_body - 0.10), scale=(1.0, 1.0, 2.5))
+            rigging.tag_primitive(fu, f"foreleg_upper.{suffix}")
+            fl = _add_sphere(0.04, (x, cy + 0.30, z_body - 0.32), scale=(1.0, 1.0, 2.0))
+            rigging.tag_primitive(fl, f"foreleg_lower.{suffix}")
+            fp = _add_sphere(0.05, (x, cy + 0.34, z_body - 0.48), scale=(1.0, 1.5, 0.6))
+            rigging.tag_primitive(fp, f"forepaw.{suffix}")
+            # Back leg
+            hu = _add_sphere(0.06, (x, cy - 0.30, z_body - 0.10), scale=(1.0, 1.0, 2.5))
+            rigging.tag_primitive(hu, f"hindleg_upper.{suffix}")
+            hl = _add_sphere(0.04, (x, cy - 0.30, z_body - 0.32), scale=(1.0, 1.0, 2.0))
+            rigging.tag_primitive(hl, f"hindleg_lower.{suffix}")
+            hp = _add_sphere(0.05, (x, cy - 0.26, z_body - 0.48), scale=(1.0, 1.5, 0.6))
+            rigging.tag_primitive(hp, f"hindpaw.{suffix}")
+            parts.extend([fu, fl, fp, hu, hl, hp])
+
+        _join(torso, *(p for p in parts if p is not torso))
+        rigging.store_bone_metadata(torso, 'QUADRUPED')
+        _finalize(torso, "PipeSculpt_Quadruped")
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_starter_bird(Operator):
+    bl_idname = "pipe_sculpt.starter_bird"
+    bl_label = "Bird"
+    bl_description = (
+        "Add a bird block with spread wings. Voxel remesh fuses parts on "
+        "Start Sculpt; Generate Rig builds 16 bones (spine, neck, head, "
+        "beak, tail, 2 wings × 3 segments, 2 legs × 2 segments)"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        _enter_object_mode(context)
+        cx, cy, cz = context.scene.cursor.location
+        z_body = cz + 0.30  # body center, scaled smaller than mammal
+
+        # Compact ovoid body
+        torso = _add_sphere(0.10, (cx, cy + 0.0, z_body), scale=(1.0, 1.8, 1.0))
+        rigging.tag_primitive(torso, "spine")
+        parts = [torso]
+
+        neck = _add_sphere(0.04, (cx, cy + 0.13, z_body + 0.02))
+        rigging.tag_primitive(neck, "neck")
+        parts.append(neck)
+        head = _add_sphere(0.05, (cx, cy + 0.18, z_body + 0.05))
+        rigging.tag_primitive(head, "head")
+        parts.append(head)
+        beak = _add_sphere(0.025, (cx, cy + 0.24, z_body + 0.04), scale=(0.7, 1.5, 0.7))
+        rigging.tag_primitive(beak, "beak")
+        parts.append(beak)
+
+        tail = _add_sphere(0.04, (cx, cy - 0.18, z_body), scale=(1.5, 2.0, 0.4))
+        rigging.tag_primitive(tail, "tail")
+        parts.append(tail)
+
+        # Wings — spread sideways along X, three segments each
+        for side, suffix in ((1, "L"), (-1, "R")):
+            wu = _add_sphere(0.04, (cx + side * 0.13, cy + 0.05, z_body + 0.05), scale=(2.0, 1.0, 0.6))
+            rigging.tag_primitive(wu, f"wing_upper.{suffix}")
+            wl = _add_sphere(0.035, (cx + side * 0.27, cy + 0.05, z_body + 0.05), scale=(2.0, 1.0, 0.5))
+            rigging.tag_primitive(wl, f"wing_lower.{suffix}")
+            wt = _add_sphere(0.025, (cx + side * 0.40, cy + 0.05, z_body + 0.05), scale=(1.5, 1.0, 0.4))
+            rigging.tag_primitive(wt, f"wingtip.{suffix}")
+            parts.extend([wu, wl, wt])
+
+        # Legs — short, two segments
+        for side, suffix in ((1, "L"), (-1, "R")):
+            x = cx + side * 0.04
+            lu = _add_sphere(0.025, (x, cy - 0.05, z_body - 0.10), scale=(1.0, 1.0, 2.0))
+            rigging.tag_primitive(lu, f"bird_leg_upper.{suffix}")
+            ll = _add_sphere(0.020, (x, cy - 0.05, z_body - 0.25), scale=(1.0, 1.0, 2.0))
+            rigging.tag_primitive(ll, f"bird_leg_lower.{suffix}")
+            parts.extend([lu, ll])
+
+        _join(torso, *(p for p in parts if p is not torso))
+        rigging.store_bone_metadata(torso, 'BIRD')
+        _finalize(torso, "PipeSculpt_Bird")
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_starter_mech(Operator):
+    bl_idname = "pipe_sculpt.starter_mech"
+    bl_label = "Mech"
+    bl_description = (
+        "Add a humanoid robot block — like Humanoid but no fingers, jaw, "
+        "ears, or clavicle wrap. Generate Rig builds 17 bones (spine + "
+        "head + 4 limb segments × 4 limbs) + 8 IK control bones"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        _enter_object_mode(context)
+        cx, cy, cz = context.scene.cursor.location
+        # Same coordinate system as Humanoid (mesh origin = torso = cz + 0.20)
+
+        # Head, neck, torso, pelvis — block-like, no facial detail
+        head_block = _add_sphere(0.13, (cx, cy, cz + 0.84), scale=(0.85, 0.85, 1.0))
+        rigging.tag_primitive(head_block, "head")
+        neck = _add_sphere(0.07, (cx, cy, cz + 0.55))
+        rigging.tag_primitive(neck, "neck")
+        torso = _add_sphere(0.275, (cx, cy, cz + 0.20), scale=(1.10, 0.70, 1.40))
+        rigging.tag_primitive(torso, "spine")
+        pelvis = _add_sphere(0.21, (cx, cy, cz - 0.25), scale=(1.05, 0.85, 0.80))
+        rigging.tag_primitive(pelvis, "pelvis")
+        parts = [head_block, neck, torso, pelvis]
+
+        # Arms — no clavicle, rigid shoulder
+        for side, suffix in ((1, "L"), (-1, "R")):
+            ua = _add_sphere(0.075, (cx + side * 0.50, cy, cz + 0.40), scale=(3.0, 1.0, 1.0))
+            rigging.tag_primitive(ua, f"upper_arm.{suffix}")
+            fa = _add_sphere(0.065, (cx + side * 0.875, cy, cz + 0.40), scale=(3.0, 1.0, 1.0))
+            rigging.tag_primitive(fa, f"forearm.{suffix}")
+            hand = _add_sphere(0.06, (cx + side * 1.13, cy, cz + 0.40), scale=(1.5, 1.0, 0.8))
+            rigging.tag_primitive(hand, f"hand.{suffix}")
+            parts.extend([ua, fa, hand])
+
+        # Legs — same structure as Humanoid but no toes
+        for side, suffix in ((1, "L"), (-1, "R")):
+            x = cx + side * 0.11
+            ul = _add_sphere(0.10, (x, cy, cz - 0.40), scale=(1.0, 1.0, 3.5))
+            rigging.tag_primitive(ul, f"upper_leg.{suffix}")
+            ll = _add_sphere(0.085, (x, cy, cz - 0.875), scale=(1.0, 1.0, 2.88))
+            rigging.tag_primitive(ll, f"lower_leg.{suffix}")
+            foot = _add_sphere(0.08, (x, cy + 0.08, cz - 1.10), scale=(0.85, 1.8, 0.6))
+            rigging.tag_primitive(foot, f"foot.{suffix}")
+            parts.extend([ul, ll, foot])
+
+        _join(torso, *(p for p in parts if p is not torso))
+        rigging.store_bone_metadata(torso, 'MECH')
+        _finalize(torso, "PipeSculpt_Mech")
+        return {'FINISHED'}
+
+
 class PIPESCULPT_PT_starters(Panel):
     bl_idname = "PIPESCULPT_PT_starters"
     bl_label = "Starter Meshes"
@@ -305,12 +477,21 @@ class PIPESCULPT_PT_starters(Panel):
     def draw(self, context):
         layout = self.layout
         layout.label(text="Adds at 3D cursor location", icon='PIVOT_CURSOR')
+
+        layout.label(text="Generic")
         grid = layout.grid_flow(row_major=True, columns=2, even_columns=True, align=True)
         grid.scale_y = 1.3
         grid.operator("pipe_sculpt.starter_sphere", icon='SPHERE')
         grid.operator("pipe_sculpt.starter_head", icon='USER')
+
+        layout.label(text="Tagged (GTR — Generate Rig works)")
+        grid = layout.grid_flow(row_major=True, columns=2, even_columns=True, align=True)
+        grid.scale_y = 1.3
         grid.operator("pipe_sculpt.starter_bust", icon='OUTLINER_OB_ARMATURE')
         grid.operator("pipe_sculpt.starter_humanoid", icon='ARMATURE_DATA')
+        grid.operator("pipe_sculpt.starter_quadruped", icon='ANIM_DATA')
+        grid.operator("pipe_sculpt.starter_bird", icon='FORCE_WIND')
+        grid.operator("pipe_sculpt.starter_mech", icon='MOD_ARMATURE')
 
 
 _classes = (
@@ -318,6 +499,9 @@ _classes = (
     PIPESCULPT_OT_starter_head,
     PIPESCULPT_OT_starter_bust,
     PIPESCULPT_OT_starter_humanoid,
+    PIPESCULPT_OT_starter_quadruped,
+    PIPESCULPT_OT_starter_bird,
+    PIPESCULPT_OT_starter_mech,
     PIPESCULPT_PT_starters,
 )
 

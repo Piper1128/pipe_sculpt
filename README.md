@@ -53,6 +53,9 @@ attribute survives voxel remesh via KDTree nearest-neighbour transfer, and
 | Humanoid | 50+ (root, spine, head, jaw, ears, clavicles, arms, legs, 30 finger phalanges, 4 IK targets + 4 pole bones) | arms + legs |
 | Bust | 7 (root, spine, neck, head, jaw, ear.L, ear.R) | none |
 | Head | 2 (root, head) | none |
+| Quadruped | 17 (spine, neck, head, tail, 4 legs × 3 segments) | none |
+| Bird | 16 (spine, neck, head, beak, tail, 2 wings × 3 segments, 2 legs × 2 segments) | none |
+| Mech | 17 deform + 8 IK control (humanoid topology, no fingers/jaw/ears) | arms + legs |
 
 Generate Rig produces:
 - Armature with the bones above, parented to mesh
@@ -150,9 +153,10 @@ attribution for an inspirational tutorial; no code is copied.
   active texture preview doesn't flip when you re-bake another mesh.
 - Curvature is not baked: Cycles has no native pass and Substance Painter
   generates a better one client-side from the baked normal.
-- **Non-humanoid rigs are not yet supported.** Humanoid, Bust, and Head
-  starters all produce rigs (closed in v0.9.1); quadrupeds, birds, and
-  mech need a new bone definition table — out of scope until needed.
+- **All built-in starter types now produce rigs** (Humanoid, Bust, Head,
+  Quadruped, Bird, Mech). Adding more (e.g. dragon, snake, fish) is a
+  single-table edit in `rigging.py` since `_RIG_TABLES` dispatches via
+  rig type id.
 - **IK pole-angle math is empirically derived** for the hardcoded HUMANOID
   rest pose. Editing bones manually before Generate Rig can twist the IK
   rest pose. Verified for default Humanoid; not for custom edits.

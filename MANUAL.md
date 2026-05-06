@@ -60,12 +60,18 @@ Hver knap findes i **N-panel → PipeSculpt → Workflow Pipeline**.
 
 ## 4. Trin 1 — Vælg en starter
 
-I **N-panel → PipeSculpt → Starter Meshes** har du 4 knapper:
+I **N-panel → PipeSculpt → Starter Meshes** har du to grupper:
 
+**Generic** (ingen rig-tags):
 - **Sphere** — generisk start. Bruges til abstrakte former, idéskitser.
-- **Head** — æg-formet sphere, rated til ansigts-sculpt.
-- **Bust** — hoved + nakke + skuldre. Til portrætter.
-- **Humanoid** — fuld krop i T-pose med fingre. Det er den med GTR-magi.
+- **Head** — æg-formet sphere, til ansigts-sculpt med single head-pivot.
+
+**Tagged (GTR — Generate Rig works)**:
+- **Bust** — hoved + nakke + skuldre. 7-bone rig til portrætter.
+- **Humanoid** — fuld krop i T-pose med fingre. 50+ bones, IK på arme/ben.
+- **Quadruped** — firbenet dyr (hund/varg/kat). 17-bone rig.
+- **Bird** — fugl med spredte vinger. 16-bone rig (vinger + ben + næb).
+- **Mech** — humanoid robot uden fingre/kæbe/ører. 17-bone rig + IK.
 
 **Anbefaling for første gang:** klik **Sphere**. Det er den mindst forvirrende.
 

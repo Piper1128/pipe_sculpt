@@ -108,7 +108,22 @@ DEFORM_BONE_NAMES: tuple[str, ...] = (
     "lower_leg.R",
     "foot.R",
     "toes.R",
-) + _generate_finger_bone_names() + ("jaw", "ear.L", "ear.R")
+) + _generate_finger_bone_names() + (
+    "jaw", "ear.L", "ear.R",
+    # Quadruped extensions — distinct from humanoid leg bones so a single
+    # mesh can never accidentally end up with both sets active.
+    "tail",
+    "foreleg_upper.L", "foreleg_lower.L", "forepaw.L",
+    "foreleg_upper.R", "foreleg_lower.R", "forepaw.R",
+    "hindleg_upper.L", "hindleg_lower.L", "hindpaw.L",
+    "hindleg_upper.R", "hindleg_lower.R", "hindpaw.R",
+    # Bird extensions
+    "beak",
+    "wing_upper.L", "wing_lower.L", "wingtip.L",
+    "wing_upper.R", "wing_lower.R", "wingtip.R",
+    "bird_leg_upper.L", "bird_leg_lower.L",
+    "bird_leg_upper.R", "bird_leg_lower.R",
+)
 BONE_NAME_TO_INDEX = {n: i for i, n in enumerate(DEFORM_BONE_NAMES)}
 
 
@@ -254,6 +269,115 @@ HEAD_BONES: tuple = (
 HEAD_IK: tuple = ()
 
 
+# === QUADRUPED rig ===
+# Layout: dog/wolf-like — body horizontal, +Y forward (head direction),
+# +Z up, +X right side. Mesh joins on torso primitive at (0, 0, 0.50).
+# Default proportions: ~0.80 m body length, 0.50 m shoulder height.
+QUADRUPED_MESH_ORIGIN_OFFSET = (0.0, 0.0, 0.50)
+
+QUADRUPED_BONES: tuple = (
+    # Master root — sits at body center, slightly above spine
+    ("root",            None,             (0.00,  0.00,  0.00), (0.00,  0.00,  0.10), 'C'),
+    # Spine runs along Y from hindquarters to shoulders
+    ("spine",           "root",           (0.00, -0.30,  0.00), (0.00,  0.30,  0.00), 'D'),
+    # Neck rises forward from shoulders, head sits on neck
+    ("neck",            "spine",          (0.00,  0.30,  0.00), (0.00,  0.40,  0.10), 'D'),
+    ("head",            "neck",           (0.00,  0.40,  0.10), (0.00,  0.55,  0.10), 'D'),
+    # Tail trails back-down from hindquarters
+    ("tail",            "spine",          (0.00, -0.30,  0.00), (0.00, -0.55, -0.10), 'D'),
+    # Front legs — upper bone from spine end, lower bone to paw
+    ("foreleg_upper.L", "spine",          (0.10,  0.30,  0.00), (0.10,  0.30, -0.20), 'D'),
+    ("foreleg_lower.L", "foreleg_upper.L",(0.10,  0.30, -0.20), (0.10,  0.30, -0.45), 'D'),
+    ("forepaw.L",       "foreleg_lower.L",(0.10,  0.30, -0.45), (0.10,  0.35, -0.50), 'D'),
+    ("foreleg_upper.R", "spine",          (-0.10, 0.30,  0.00), (-0.10, 0.30, -0.20), 'D'),
+    ("foreleg_lower.R", "foreleg_upper.R",(-0.10, 0.30, -0.20), (-0.10, 0.30, -0.45), 'D'),
+    ("forepaw.R",       "foreleg_lower.R",(-0.10, 0.30, -0.45), (-0.10, 0.35, -0.50), 'D'),
+    # Back legs
+    ("hindleg_upper.L", "spine",          (0.10, -0.30,  0.00), (0.10, -0.30, -0.20), 'D'),
+    ("hindleg_lower.L", "hindleg_upper.L",(0.10, -0.30, -0.20), (0.10, -0.30, -0.45), 'D'),
+    ("hindpaw.L",       "hindleg_lower.L",(0.10, -0.30, -0.45), (0.10, -0.25, -0.50), 'D'),
+    ("hindleg_upper.R", "spine",          (-0.10, -0.30, 0.00), (-0.10, -0.30, -0.20), 'D'),
+    ("hindleg_lower.R", "hindleg_upper.R",(-0.10, -0.30, -0.20), (-0.10, -0.30, -0.45), 'D'),
+    ("hindpaw.R",       "hindleg_lower.R",(-0.10, -0.30, -0.45), (-0.10, -0.25, -0.50), 'D'),
+)
+# No IK by default — quadruped IK chains are tricky (knee/elbow direction
+# inversions on front vs back legs). User can add post-Generate-Rig.
+QUADRUPED_IK: tuple = ()
+
+
+# === BIRD rig ===
+# Layout: small horizontal body, wings spread sideways, legs down.
+# +Y forward, +Z up, +X right. Mesh joins on torso at (0, 0, 0.30).
+BIRD_MESH_ORIGIN_OFFSET = (0.0, 0.0, 0.30)
+
+BIRD_BONES: tuple = (
+    ("root",             None,              (0.00,  0.00,  0.00), (0.00,  0.00,  0.10), 'C'),
+    ("spine",            "root",            (0.00, -0.10,  0.00), (0.00,  0.10,  0.00), 'D'),
+    ("neck",             "spine",           (0.00,  0.10,  0.00), (0.00,  0.15,  0.05), 'D'),
+    ("head",             "neck",            (0.00,  0.15,  0.05), (0.00,  0.20,  0.10), 'D'),
+    ("beak",             "head",            (0.00,  0.20,  0.08), (0.00,  0.27,  0.07), 'D'),
+    ("tail",             "spine",           (0.00, -0.10,  0.00), (0.00, -0.25,  0.00), 'D'),
+    # Wings — three segments per side, splayed along X
+    ("wing_upper.L",     "spine",           (0.05,  0.05,  0.05), (0.20,  0.05,  0.05), 'D'),
+    ("wing_lower.L",     "wing_upper.L",    (0.20,  0.05,  0.05), (0.35,  0.05,  0.05), 'D'),
+    ("wingtip.L",        "wing_lower.L",    (0.35,  0.05,  0.05), (0.45,  0.05,  0.05), 'D'),
+    ("wing_upper.R",     "spine",           (-0.05, 0.05,  0.05), (-0.20, 0.05,  0.05), 'D'),
+    ("wing_lower.R",     "wing_upper.R",    (-0.20, 0.05,  0.05), (-0.35, 0.05,  0.05), 'D'),
+    ("wingtip.R",        "wing_lower.R",    (-0.35, 0.05,  0.05), (-0.45, 0.05,  0.05), 'D'),
+    # Legs — two segments, simpler than mammal legs
+    ("bird_leg_upper.L", "spine",           (0.04, -0.05,  0.00), (0.04, -0.05, -0.15), 'D'),
+    ("bird_leg_lower.L", "bird_leg_upper.L",(0.04, -0.05, -0.15), (0.04, -0.05, -0.30), 'D'),
+    ("bird_leg_upper.R", "spine",           (-0.04, -0.05, 0.00), (-0.04, -0.05, -0.15), 'D'),
+    ("bird_leg_lower.R", "bird_leg_upper.R",(-0.04, -0.05, -0.15), (-0.04, -0.05, -0.30), 'D'),
+)
+BIRD_IK: tuple = ()
+
+
+# === MECH rig ===
+# Robot/mech: humanoid topology stripped of biological details (no fingers,
+# no jaw, no ears, no clavicle wrap). Same pose as Humanoid (T-pose, +X right
+# arm). Mesh joins on torso at (0, 0, 0.20) like Humanoid.
+MECH_MESH_ORIGIN_OFFSET = (0.0, 0.0, 0.20)
+
+MECH_BONES: tuple = (
+    ("root",         None,           (0.00,  0.00,  0.00),  (0.00,  0.00,  0.20),  'C'),
+    ("pelvis",       "root",         (0.00,  0.00, -0.418), (0.00,  0.00, -0.082), 'D'),
+    ("spine",        "pelvis",       (0.00,  0.00, -0.082), (0.00,  0.00,  0.585), 'D'),
+    ("neck",         "spine",        (0.00,  0.00,  0.585), (0.00,  0.00,  0.625), 'D'),
+    ("head",         "neck",         (0.00,  0.00,  0.625), (0.00,  0.00,  0.956), 'D'),
+    # Arms — no clavicle (rigid mech shoulder), 3-bone chain
+    ("upper_arm.L",  "spine",        (0.30,  0.00,  0.400), (0.70,  0.00,  0.400), 'D'),
+    ("forearm.L",    "upper_arm.L",  (0.70,  0.00,  0.400), (1.05,  0.00,  0.400), 'D'),
+    ("hand.L",       "forearm.L",    (1.05,  0.00,  0.400), (1.20,  0.00,  0.400), 'D'),
+    ("upper_arm.R",  "spine",        (-0.30, 0.00,  0.400), (-0.70, 0.00,  0.400), 'D'),
+    ("forearm.R",    "upper_arm.R",  (-0.70, 0.00,  0.400), (-1.05, 0.00,  0.400), 'D'),
+    ("hand.R",       "forearm.R",    (-1.05, 0.00,  0.400), (-1.20, 0.00,  0.400), 'D'),
+    # Legs — same as humanoid
+    ("upper_leg.L",  "pelvis",       (0.11,  0.00, -0.082), (0.11,  0.00, -0.650), 'D'),
+    ("lower_leg.L",  "upper_leg.L",  (0.11,  0.00, -0.650), (0.11,  0.00, -1.050), 'D'),
+    ("foot.L",       "lower_leg.L",  (0.11,  0.00, -1.050), (0.11,  0.20, -1.100), 'D'),
+    ("upper_leg.R",  "pelvis",       (-0.11, 0.00, -0.082), (-0.11, 0.00, -0.650), 'D'),
+    ("lower_leg.R",  "upper_leg.R",  (-0.11, 0.00, -0.650), (-0.11, 0.00, -1.050), 'D'),
+    ("foot.R",       "lower_leg.R",  (-0.11, 0.00, -1.050), (-0.11, 0.20, -1.100), 'D'),
+    # IK targets + poles for arms and legs
+    ("hand_ik.L",    "root", (1.05,  0.00,  0.400), (1.20,  0.00,  0.400), 'C'),
+    ("elbow_pole.L", "root", (0.70, -0.30,  0.400), (0.70, -0.40,  0.400), 'C'),
+    ("hand_ik.R",    "root", (-1.05, 0.00,  0.400), (-1.20, 0.00,  0.400), 'C'),
+    ("elbow_pole.R", "root", (-0.70, -0.30, 0.400), (-0.70, -0.40, 0.400), 'C'),
+    ("foot_ik.L",    "root", (0.11,  0.00, -1.050), (0.11,  0.20, -1.100), 'C'),
+    ("knee_pole.L",  "root", (0.11,  0.30, -0.650), (0.11,  0.40, -0.650), 'C'),
+    ("foot_ik.R",    "root", (-0.11, 0.00, -1.050), (-0.11, 0.20, -1.100), 'C'),
+    ("knee_pole.R",  "root", (-0.11, 0.30, -0.650), (-0.11, 0.40, -0.650), 'C'),
+)
+
+MECH_IK: tuple = (
+    ("forearm.L",   "hand_ik.L", "elbow_pole.L", 2),
+    ("forearm.R",   "hand_ik.R", "elbow_pole.R", 2),
+    ("lower_leg.L", "foot_ik.L", "knee_pole.L",  2),
+    ("lower_leg.R", "foot_ik.R", "knee_pole.R",  2),
+)
+
+
 def tag_primitive(obj, bone_name: str) -> None:
     """Tag every vertex of a primitive object with its deform-bone index."""
     bone_index = BONE_NAME_TO_INDEX.get(bone_name, -1)
@@ -295,9 +419,12 @@ def _serialize_ik(ik_specs):
 
 
 _RIG_TABLES: dict = {
-    'HUMANOID': (HUMANOID_BONES, HUMANOID_IK, HUMANOID_MESH_ORIGIN_OFFSET),
-    'BUST':     (BUST_BONES,     BUST_IK,     BUST_MESH_ORIGIN_OFFSET),
-    'HEAD':     (HEAD_BONES,     HEAD_IK,     HEAD_MESH_ORIGIN_OFFSET),
+    'HUMANOID':  (HUMANOID_BONES,  HUMANOID_IK,  HUMANOID_MESH_ORIGIN_OFFSET),
+    'BUST':      (BUST_BONES,      BUST_IK,      BUST_MESH_ORIGIN_OFFSET),
+    'HEAD':      (HEAD_BONES,      HEAD_IK,      HEAD_MESH_ORIGIN_OFFSET),
+    'QUADRUPED': (QUADRUPED_BONES, QUADRUPED_IK, QUADRUPED_MESH_ORIGIN_OFFSET),
+    'BIRD':      (BIRD_BONES,      BIRD_IK,      BIRD_MESH_ORIGIN_OFFSET),
+    'MECH':      (MECH_BONES,      MECH_IK,      MECH_MESH_ORIGIN_OFFSET),
 }
 
 
