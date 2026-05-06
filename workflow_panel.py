@@ -62,6 +62,23 @@ class PIPESCULPT_PT_workflow(Panel):
         layout.separator()
         col = layout.column(align=True)
         col.scale_y = 1.4
+        col.label(text="UV & Paint", icon='UV')
+        col.operator("pipe_sculpt.uv_smart_unwrap", icon='MOD_UVPROJECT')
+        row = col.row(align=True)
+        row.operator("pipe_sculpt.uv_auto_seam", text="Auto-Seam", icon='EDGESEL')
+        row.operator("pipe_sculpt.uv_symmetry_mirror", text="Mirror X", icon='MOD_MIRROR')
+        row = col.row(align=True)
+        row.operator("pipe_sculpt.uv_checker_toggle", text="Checker", icon='TEXTURE')
+        row.operator("pipe_sculpt.uv_stretch_toggle", text="Stretch", icon='OVERLAY')
+        col.operator("pipe_sculpt.uv_texel_density", icon='DRIVER_DISTANCE')
+        col.separator()
+        col.operator("pipe_sculpt.paint_setup", icon='BRUSH_DATA')
+        col.operator("pipe_sculpt.paint_setup_pbr", icon='NODE_TEXTURE')
+        col.operator("pipe_sculpt.paint_save", icon='FILE_TICK')
+
+        layout.separator()
+        col = layout.column(align=True)
+        col.scale_y = 1.4
         col.label(text="Genesis-Tracked Rigging", icon='ARMATURE_DATA')
         col.operator("pipe_sculpt.generate_rig", icon='OUTLINER_OB_ARMATURE')
 
