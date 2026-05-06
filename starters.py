@@ -93,13 +93,22 @@ class PIPESCULPT_OT_starter_sphere(Operator):
 class PIPESCULPT_OT_starter_head(Operator):
     bl_idname = "pipe_sculpt.starter_head"
     bl_label = "Head"
-    bl_description = "Add an egg-shaped quad-sphere ready for face sculpting (no UV-sphere poles)"
+    bl_description = (
+        "Add an egg-shaped quad-sphere with GTR head tag. Generate Rig "
+        "produces a 2-bone rig (root + head pivot). Use Bust if you also "
+        "want jaw + ear bones"
+    )
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         _enter_object_mode(context)
         loc = context.scene.cursor.location.copy()
         obj = _add_quad_sphere(1.0, loc, scale=(0.85, 0.95, 1.1))
+        # Tag the entire egg as 'head' so Generate Rig produces a single
+        # head bone that follows the whole mesh. HEAD rig (root + head)
+        # is for portrait sculpts where you want a pivot, not a full face rig.
+        rigging.tag_primitive(obj, "head")
+        rigging.store_bone_metadata(obj, 'HEAD')
         _finalize(obj, "PipeSculpt_Head", subsurf_levels=0)
         return {'FINISHED'}
 
@@ -107,7 +116,11 @@ class PIPESCULPT_OT_starter_head(Operator):
 class PIPESCULPT_OT_starter_bust(Operator):
     bl_idname = "pipe_sculpt.starter_bust"
     bl_label = "Bust"
-    bl_description = "Add a head + neck + shoulder block — voxel remesh fuses them when you Start Sculpt"
+    bl_description = (
+        "Add a head + neck + shoulder block with GTR tags. Voxel remesh fuses "
+        "the parts on Start Sculpt; Generate Rig builds 7 bones (root, spine, "
+        "neck, head, jaw, ears) for portrait animation"
+    )
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -115,10 +128,31 @@ class PIPESCULPT_OT_starter_bust(Operator):
         cx, cy, cz = context.scene.cursor.location
 
         head = _add_sphere(0.18, (cx, cy, cz + 0.78), scale=(0.85, 0.95, 1.10))
+        rigging.tag_primitive(head, "head")
         neck = _add_sphere(0.07, (cx, cy, cz + 0.52))
+        rigging.tag_primitive(neck, "neck")
         shoulders = _add_sphere(0.32, (cx, cy, cz + 0.10), scale=(1.60, 1.00, 0.80))
+        rigging.tag_primitive(shoulders, "spine")
 
-        _join(head, neck, shoulders)
+        parts = [head, neck, shoulders]
+
+        # Sub-voxel anchors for jaw + ears — invisible bumps that exist only
+        # to give the corresponding bones their vertex-group weights post
+        # voxel-remesh. User sculpts the actual jawline / ears manually.
+        jaw_anchor = _add_sphere(0.025, (cx, cy + 0.040, cz + 0.71))
+        rigging.tag_primitive(jaw_anchor, "jaw")
+        parts.append(jaw_anchor)
+
+        for side, suffix in ((1, "L"), (-1, "R")):
+            ear = _add_sphere(
+                0.018, (cx + side * 0.135, cy - 0.02, cz + 0.78),
+                scale=(0.8, 1.0, 1.0),
+            )
+            rigging.tag_primitive(ear, f"ear.{suffix}")
+            parts.append(ear)
+
+        _join(head, *(p for p in parts if p is not head))
+        rigging.store_bone_metadata(head, 'BUST')
         _finalize(head, "PipeSculpt_Bust")
         return {'FINISHED'}
 

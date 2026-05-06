@@ -216,6 +216,44 @@ def _calc_pole_angle(base_bone, ik_bone, pole_pos):
 HUMANOID_MESH_ORIGIN_OFFSET = (0.0, 0.0, 0.20)
 
 
+# === BUST rig ===
+# Bust starter joins head + neck + shoulders. After _join, the head primitive
+# is the active object so mesh origin = head center = cursor + (0, 0, 0.78).
+# Bone coords below are in mesh-local space (head center = origin).
+BUST_MESH_ORIGIN_OFFSET = (0.0, 0.0, 0.78)
+
+BUST_BONES: tuple = (
+    # Master root — sits below the shoulders
+    ("root",     None,     (0.000,  0.000, -0.85),  (0.000,  0.000, -0.70),  'C'),
+    # Shoulder/upper-spine deform — drives the shoulder volume
+    ("spine",    "root",   (0.000,  0.000, -0.68),  (0.000,  0.000, -0.30),  'D'),
+    # Neck
+    ("neck",     "spine",  (0.000,  0.000, -0.30),  (0.000,  0.000, -0.05),  'D'),
+    # Head — base of head to top of cranium
+    ("head",     "neck",   (0.000,  0.000, -0.05),  (0.000,  0.000,  0.25),  'D'),
+    # Jaw — pivot just below ear, swings forward and down
+    ("jaw",      "head",   (0.000,  0.040, -0.07),  (0.000,  0.110, -0.15),  'D'),
+    # Ears — sub-voxel anchor so brushes don't see them, but rig deform works
+    ("ear.L",    "head",   (0.130, -0.020,  0.000), (0.160, -0.020,  0.000), 'D'),
+    ("ear.R",    "head",   (-0.130, -0.020, 0.000), (-0.160, -0.020, 0.000), 'D'),
+)
+BUST_IK: tuple = ()  # Bust has no IK chains.
+
+
+# === HEAD rig ===
+# Head starter is a single quad-sphere egg at the cursor; mesh origin = cursor.
+# Bone set is intentionally minimal (root + head) — Head is for portrait /
+# face-detail sculpting where you want a pivot point but not a full face rig.
+# Use BUST if you want jaw + ear bones.
+HEAD_MESH_ORIGIN_OFFSET = (0.0, 0.0, 0.0)
+
+HEAD_BONES: tuple = (
+    ("root",  None,    (0.000, 0.000, -1.10), (0.000, 0.000, -0.90), 'C'),
+    ("head",  "root",  (0.000, 0.000, -1.00), (0.000, 0.000,  1.00), 'D'),
+)
+HEAD_IK: tuple = ()
+
+
 def tag_primitive(obj, bone_name: str) -> None:
     """Tag every vertex of a primitive object with its deform-bone index."""
     bone_index = BONE_NAME_TO_INDEX.get(bone_name, -1)
@@ -256,14 +294,22 @@ def _serialize_ik(ik_specs):
     ]
 
 
+_RIG_TABLES: dict = {
+    'HUMANOID': (HUMANOID_BONES, HUMANOID_IK, HUMANOID_MESH_ORIGIN_OFFSET),
+    'BUST':     (BUST_BONES,     BUST_IK,     BUST_MESH_ORIGIN_OFFSET),
+    'HEAD':     (HEAD_BONES,     HEAD_IK,     HEAD_MESH_ORIGIN_OFFSET),
+}
+
+
 def store_bone_metadata(obj, rig_type: str) -> None:
     """Store the bone hierarchy + IK spec on the joined object as JSON in mesh-local coords."""
-    if rig_type == 'HUMANOID':
-        bones = _serialize_bones(HUMANOID_BONES, HUMANOID_MESH_ORIGIN_OFFSET)
-        ik = _serialize_ik(HUMANOID_IK)
+    table = _RIG_TABLES.get(rig_type)
+    if table is None:
+        bones, ik = [], []
     else:
-        bones = []
-        ik = []
+        bone_table, ik_table, origin_offset = table
+        bones = _serialize_bones(bone_table, origin_offset)
+        ik = _serialize_ik(ik_table)
     obj[META_PROP] = json.dumps({"bones": bones, "ik": ik})
     obj[RIG_TYPE_PROP] = rig_type
 
