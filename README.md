@@ -1,8 +1,11 @@
 # SculptKit
 
 A Blender 5.x addon that turns the sculpt-to-Unity pipeline into a few clicks.
-Pie menus for brushes, preset-driven workflow, Genesis-Tracked Rigging, and a
-Unity 6-aware FBX exporter.
+Pie menus for brushes, preset-driven workflow, Genesis-Tracked Rigging, manual
+retopology helper, and a Unity 6-aware FBX exporter.
+
+> **New to Blender?** Read [`MANUAL.md`](MANUAL.md) for a step-by-step tutorial
+> from install to Unity export. This README is the technical reference.
 
 ## Features
 
@@ -55,6 +58,21 @@ attribute survives voxel remesh via KDTree nearest-neighbour transfer, and
 Tags are also transferred through Retopo automatically, so you can sculpt →
 retopo → rig in any order.
 
+### Manual retopology helper
+For cases where Quadriflow gives bad topology (faces, hard-surface, mech):
+
+- **Setup Manual Retopo** — duplicates a starter plane, adds Mirror +
+  Shrinkwrap to the high-poly, locks the high-poly's selectability,
+  enables Blender 5.x Retopology overlay, configures Face Project snap
+  (the Blender Secrets-style "snap chaos" fix), enters Edit Mode with X
+  symmetry on.
+- **Relax Geometry** — switches the active retopo mesh into Sculpt Mode
+  with the Relax Slide brush activated, so you can paint-equalise bunched
+  topology without changing silhouette.
+- **Finish Manual Retopo** — applies Mirror + Shrinkwrap, transfers GTR
+  bone tags from the paired high-poly via KDTree, hides high-poly, and
+  resets snap state.
+
 ### Unity 6 FBX export
 Wraps Blender's FBX exporter with two selectable axis modes:
 
@@ -89,6 +107,20 @@ FBX export shipped. Verified end-to-end in Blender 5.1 background mode
 behaviour for the **Declared** axis mode has not been round-trip tested
 yet — use **Baked** for verified output.
 
+## License & legal
+
+Licensed under **GPL-3.0-or-later** (see [`LICENSE`](LICENSE)) to match Blender's
+own license. You may use, modify, and redistribute SculptKit under those terms.
+
+The name "SculptKit" is also used by an unrelated Unity Asset Store product;
+SculptKit (this addon) is not affiliated with that or any other product. If
+you fork and publish, consider renaming to avoid confusion.
+
+References to *Blender*, *Unity 6*, and *FBX* are nominative use under their
+respective trademark holders' fair-use guidelines and indicate compatibility
+only. The "Blender Secrets" reference in `manual_retopo_ops.py` is editorial
+attribution for an inspirational tutorial; no code is copied.
+
 ## Known limitations
 
 - Q / Shift+Q only override Quick Favorites in **Sculpt** mode.
@@ -107,7 +139,12 @@ yet — use **Baked** for verified output.
 1. **Starter Meshes** panel → pick **Humanoid** (or another starter).
 2. **Workflow Pipeline** panel → preset (Character/Bust/Prop) → **Start Sculpt**.
 3. Sculpt with `Q` / `Shift+Q` pies. Click **Add Detail** for multires steps.
-4. **Retopo** → produces `<name>_retopo`; tags carry through.
+4. **Retopo** (auto: Quadriflow / Decimate) **or** **Setup Manual Retopo**
+   (when auto-retopo gives poor topology) → produces a low-poly with GTR
+   tags carried through.
 5. **Generate Rig** (if Humanoid) → armature + IK + initial weights.
 6. **Bake Maps** → PNGs in `<blend_dir>/textures/`.
 7. **Export FBX (Unity)** → drop the FBX + textures into Unity 6.
+
+For a beginner-friendly walkthrough with screenshots-style explanations,
+see [`MANUAL.md`](MANUAL.md).
