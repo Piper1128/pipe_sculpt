@@ -83,20 +83,26 @@ def _set_active_bake_target(mat, image):
     tex_node.select = True
 
 
-def _save_image_next_to_blend(img, sub_dir="textures") -> str | None:
-    """Save image to <blend_dir>/textures/<image>.png. Returns path or None."""
+def _save_image_next_to_blend(img, sub_dir="textures") -> tuple[str | None, bool]:
+    """Save image to <blend_dir>/textures/<image>.png.
+
+    Returns (path, overwrote_existing). overwrote_existing lets the operator
+    surface a soft warning when a re-bake replaced a previous PNG, so the
+    user knows their old file is gone.
+    """
     blend_path = bpy.data.filepath
     if not blend_path:
         img.pack()
-        return None
+        return None, False
     blend_dir = os.path.dirname(blend_path)
     out_dir = os.path.join(blend_dir, sub_dir)
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{img.name}.png")
+    overwrote = os.path.exists(out_path)
     img.filepath_raw = out_path
     img.file_format = 'PNG'
     img.save()
-    return out_path
+    return out_path, overwrote
 
 
 def _build_cage_object(low_obj, extrusion: float):
@@ -280,9 +286,11 @@ class PIPESCULPT_OT_bake_maps(Operator):
             return None
 
         if self.save_to_disk:
-            saved = _save_image_next_to_blend(img)
+            saved, overwrote = _save_image_next_to_blend(img)
             if saved is None:
                 img.pack()
+            elif overwrote:
+                self.report({'INFO'}, f"Replaced existing '{os.path.basename(saved)}'")
         else:
             img.pack()
         return img

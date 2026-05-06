@@ -194,13 +194,11 @@ def _configure_retopology_overlay(context, offset: float = 0.01):
     space = _find_3d_view_space(context)
     if space is None:
         return False
-    ovl = space.overlay
-    if hasattr(ovl, 'show_retopology'):
-        ovl.show_retopology = True
-        if hasattr(ovl, 'retopology_offset'):
-            ovl.retopology_offset = offset
-        return True
-    return False
+    # Manifest pins blender_version_min = 5.0.0; show_retopology has been on
+    # space.overlay since 4.0, so no hasattr guard needed.
+    space.overlay.show_retopology = True
+    space.overlay.retopology_offset = offset
+    return True
 
 
 def _lock_high_poly(high):

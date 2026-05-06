@@ -3,6 +3,16 @@
 v0.5 adds clavicle + toes deform bones, IK control bones (hand_ik, elbow_pole,
 foot_ik, knee_pole), and auto-IK constraints on arms and legs. Bone names use
 Blender symmetry suffix (.L / .R) for compatibility with mirror/symmetrize tools.
+
+UNVERIFIED ASSUMPTIONS (P3, pending interactive Blender test):
+  - bone roll=0 + matrix_local.col[0] gives a usable IK reference axis. The
+    pole_angle scan in _calc_pole_angle was derived empirically against
+    rest-pose bbox preservation — but only for the hardcoded HUMANOID rest
+    pose. If the user manually edits bones before Generate Rig, the pole math
+    can twist.
+  - HUMANOID is the only supported rig topology. Bust/Head starters get no
+    bones at all; non-humanoid creatures (quadrupeds, birds, mech) need a
+    different bone definition table — out of scope for v0.x.
 """
 from __future__ import annotations
 
