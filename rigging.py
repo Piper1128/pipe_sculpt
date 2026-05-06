@@ -381,6 +381,24 @@ class PIPESCULPT_OT_generate_rig(Operator):
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
+        # Idempotency: if mesh already has a GTR Armature modifier pointing at
+        # an armature object, we're regenerating an existing rig — nuke the old
+        # one cleanly so the scene doesn't end up with `name_Armature.001` and
+        # an orphaned previous build.
+        existing_arm_mod = mesh_obj.modifiers.get("GTR Armature")
+        if existing_arm_mod is not None and existing_arm_mod.object is not None:
+            old_arm = existing_arm_mod.object
+            old_arm_data = old_arm.data
+            mesh_obj.modifiers.remove(existing_arm_mod)
+            if mesh_obj.parent is old_arm:
+                # Preserve world transform when un-parenting
+                world = mesh_obj.matrix_world.copy()
+                mesh_obj.parent = None
+                mesh_obj.matrix_world = world
+            bpy.data.objects.remove(old_arm, do_unlink=True)
+            if old_arm_data is not None and old_arm_data.users == 0:
+                bpy.data.armatures.remove(old_arm_data, do_unlink=True)
+
         arm_data = bpy.data.armatures.new(f"{mesh_obj.name}_Armature")
         arm_obj = bpy.data.objects.new(f"{mesh_obj.name}_Armature", arm_data)
         context.collection.objects.link(arm_obj)
