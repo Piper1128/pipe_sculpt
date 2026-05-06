@@ -80,6 +80,12 @@ def _spawn_retopo_mesh(context, high):
 
 
 def _ensure_modifiers(retopo, high, shrinkwrap_offset: float):
+    """Add Mirror + Shrinkwrap and force the canonical order (Mirror → Shrinkwrap).
+
+    Order matters: Shrinkwrap must run AFTER Mirror so it sees the mirrored
+    geometry and projects both halves onto the high-poly. Reverse order
+    leaves the mirror half un-projected and produces broken topology.
+    """
     # Mirror with clipping
     mir = next((m for m in retopo.modifiers if m.name == MIRROR_MOD_NAME), None)
     if mir is None:
@@ -87,9 +93,14 @@ def _ensure_modifiers(retopo, high, shrinkwrap_offset: float):
     mir.use_axis = (True, False, False)
     mir.use_clip = True
     mir.use_mirror_merge = True
-    mir.merge_threshold = 0.001
+    # Scale merge threshold to mesh size — a fixed 1mm is too coarse on
+    # 10cm props and too fine on 10m hero meshes.
+    bbox = max(retopo.dimensions.x, retopo.dimensions.y, retopo.dimensions.z, 0.1)
+    mir.merge_threshold = max(0.0001, bbox * 0.001)
 
-    # Shrinkwrap to high-poly
+    # Shrinkwrap to high-poly. PROJECT along negative Z is the Blender Secrets
+    # default for retopo, but NEAREST_SURFACEPOINT works for the all-angle
+    # case where the user is moving verts manually with Face Project snap.
     sw = next((m for m in retopo.modifiers if m.name == SHRINKWRAP_MOD_NAME), None)
     if sw is None:
         sw = retopo.modifiers.new(name=SHRINKWRAP_MOD_NAME, type='SHRINKWRAP')
@@ -97,8 +108,67 @@ def _ensure_modifiers(retopo, high, shrinkwrap_offset: float):
     sw.wrap_method = 'NEAREST_SURFACEPOINT'
     sw.offset = shrinkwrap_offset
 
+    # Force order: Mirror first, then Shrinkwrap. Idempotent — moves are no-ops
+    # if the modifier is already at the right index.
+    bpy.ops.object.modifier_move_to_index(modifier=MIRROR_MOD_NAME, index=0)
+    bpy.ops.object.modifier_move_to_index(modifier=SHRINKWRAP_MOD_NAME, index=1)
+
+
+# Scene props snapshotting prior tool_settings so Finish/Cancel can restore them
+_SNAP_PROPS = (
+    "use_snap",
+    "snap_elements",
+    "snap_elements_individual",
+    "snap_target",
+    "use_snap_backface_culling",
+    "use_snap_self",
+    "use_snap_align_rotation",
+)
+SNAP_SNAPSHOT_KEY = "pipe_sculpt_snap_snapshot"
+
+
+def _snapshot_snap(context):
+    """Save current tool_settings snap state into a scene custom prop."""
+    ts = context.scene.tool_settings
+    snapshot = {}
+    for p in _SNAP_PROPS:
+        v = getattr(ts, p, None)
+        # bpy_prop_set is not JSON-serialisable; convert to list
+        if hasattr(v, '__iter__') and not isinstance(v, str):
+            snapshot[p] = list(v)
+        else:
+            snapshot[p] = v
+    import json as _json
+    context.scene[SNAP_SNAPSHOT_KEY] = _json.dumps(snapshot)
+
+
+def _restore_snap(context):
+    """Restore tool_settings snap state from the scene custom prop, if present."""
+    snap_json = context.scene.get(SNAP_SNAPSHOT_KEY)
+    if not snap_json:
+        return
+    import json as _json
+    try:
+        snapshot = _json.loads(snap_json)
+    except ValueError:
+        return
+    ts = context.scene.tool_settings
+    for p in _SNAP_PROPS:
+        if p not in snapshot:
+            continue
+        v = snapshot[p]
+        try:
+            if isinstance(v, list):
+                setattr(ts, p, set(v))
+            else:
+                setattr(ts, p, v)
+        except (TypeError, AttributeError):
+            continue
+    del context.scene[SNAP_SNAPSHOT_KEY]
+
 
 def _configure_snap(context):
+    _snapshot_snap(context)
     ts = context.scene.tool_settings
     ts.use_snap = True
     ts.snap_elements = {'FACE'}
@@ -272,9 +342,14 @@ class PIPESCULPT_OT_retopo_manual_finish(Operator):
             if prop in retopo:
                 del retopo[prop]
 
-        # Reset snap to vertex (default-ish) so the user isn't surprised later
-        ts = context.scene.tool_settings
-        ts.snap_elements_individual = set()
+        # Disable Edit-mode X mirror — Mirror modifier was just applied so
+        # the geometry is already mirrored; leaving use_mirror_x on would
+        # add a redundant edit-mode mirror that prevents X=0 verts from
+        # moving off-axis (confusing for the user).
+        retopo.data.use_mirror_x = False
+
+        # Restore prior snap settings instead of nulling them
+        _restore_snap(context)
 
         # Turn off retopology overlay
         space = _find_3d_view_space(context)
@@ -282,6 +357,69 @@ class PIPESCULPT_OT_retopo_manual_finish(Operator):
             space.overlay.show_retopology = False
 
         self.report({'INFO'}, f"Finished retopo on '{retopo.name}'; {tag_msg}")
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_retopo_manual_cancel(Operator):
+    bl_idname = "pipe_sculpt.retopo_manual_cancel"
+    bl_label = "Cancel Manual Retopo"
+    bl_description = (
+        "Abort an active retopo session: unlock the high-poly, drop "
+        "the retopo's Mirror+Shrinkwrap modifiers, restore prior snap "
+        "settings. Does NOT delete the retopo mesh"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        # Available whenever a retopo session is detected — either via the
+        # marker prop on the active mesh, or any mesh in the file with the
+        # marker (so the user can recover from a save/reload).
+        obj = context.active_object
+        if obj is not None and obj.get(RETOPO_MARKER_PROP):
+            return True
+        return any(o.get(RETOPO_MARKER_PROP) for o in bpy.data.objects)
+
+    def execute(self, context):
+        retopo = context.active_object
+        if retopo is None or not retopo.get(RETOPO_MARKER_PROP):
+            # Find any retopo session in the file
+            retopo = next(
+                (o for o in bpy.data.objects if o.get(RETOPO_MARKER_PROP)),
+                None,
+            )
+        if retopo is None:
+            self.report({'ERROR'}, "No active retopo session found")
+            return {'CANCELLED'}
+
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Unlock paired high-poly if we can find it
+        high_name = retopo.get(RETOPO_HIGH_PROP)
+        if high_name:
+            high = bpy.data.objects.get(high_name)
+            if high is not None:
+                high.hide_select = False
+
+        # Drop our session modifiers (don't apply — user is bailing)
+        for mod_name in (MIRROR_MOD_NAME, SHRINKWRAP_MOD_NAME):
+            mod = retopo.modifiers.get(mod_name)
+            if mod is not None:
+                retopo.modifiers.remove(mod)
+
+        # Clean up props + snap state
+        for prop in (RETOPO_HIGH_PROP, RETOPO_MARKER_PROP):
+            if prop in retopo:
+                del retopo[prop]
+        retopo.data.use_mirror_x = False
+        _restore_snap(context)
+
+        space = _find_3d_view_space(context)
+        if space is not None and hasattr(space.overlay, 'show_retopology'):
+            space.overlay.show_retopology = False
+
+        self.report({'INFO'}, f"Cancelled retopo session on '{retopo.name}'")
         return {'FINISHED'}
 
 
@@ -342,6 +480,7 @@ class PIPESCULPT_OT_retopo_relax(Operator):
 _classes = (
     PIPESCULPT_OT_retopo_manual_setup,
     PIPESCULPT_OT_retopo_manual_finish,
+    PIPESCULPT_OT_retopo_manual_cancel,
     PIPESCULPT_OT_retopo_relax,
 )
 

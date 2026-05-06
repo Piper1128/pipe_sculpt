@@ -35,6 +35,7 @@ class PIPESCULPT_PT_workflow(Panel):
         col.operator("pipe_sculpt.retopo_manual_setup", icon='MOD_SHRINKWRAP')
         col.operator("pipe_sculpt.retopo_relax", icon='BRUSHES_ALL')
         col.operator("pipe_sculpt.retopo_manual_finish", icon='CHECKMARK')
+        col.operator("pipe_sculpt.retopo_manual_cancel", icon='X')
 
         layout.separator()
         col = layout.column(align=True)
