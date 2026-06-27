@@ -106,9 +106,12 @@ def _build_curves_from_strands(curves_data, strands) -> bool:
     Curves population API (add_curves / foreach_set) is version-sensitive
     and worth failing loud on rather than silently producing empty hair.
     """
-    # Clear any existing curves first
+    # Clear any existing curves first. remove_curves() with NO arguments
+    # clears every curve in Blender 5.1 — verified in the API audit. Passing
+    # None (positional or indices=None) raises; an explicit index list also
+    # works but no-args is the cleanest "remove all".
     if len(curves_data.curves) > 0:
-        curves_data.remove_curves(None)  # None = remove all
+        curves_data.remove_curves()
 
     sizes = [len(s) for s in strands]
     if not sizes:
