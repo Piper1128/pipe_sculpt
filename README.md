@@ -104,9 +104,11 @@ An "Animate" panel (pose-mode only) with pose / keying / loop quick-tools
 for animating GTR rigs toward Unity export. Pure logic in `anim_core.py`
 (headless-tested), thin operators in `anim_ops.py`.
 
-- **Pose:** Copy / Paste / Paste-Flipped / Mirror (one-click L↔R) / Reset to
-  rest. Mirror uses `(w, x, -y, -z)` quaternion + negated-X location, verified
-  correct for GTR's mirror-symmetric `.L`/`.R` bones.
+- **Pose:** Copy / Paste / Paste-Flipped / Mirror (one-click L↔R) / Breakdown
+  Slider / Reset to rest. Mirror uses `(w, x, -y, -z)` quaternion + negated-X
+  location, verified correct for GTR's mirror-symmetric `.L`/`.R` bones. The
+  Breakdown Slider is a modal tween machine — drag to blend selected bones
+  between their previous and next keys (also has a scriptable `blend` value).
 - **Key:** Key Whole Rig / Key Selected / Toggle Stepped↔Spline (blocking vs
   spline interpolation) / Fit Preview Range.
 - **Loop:** Validate Loop (diffs first vs last frame, reports the bones that
