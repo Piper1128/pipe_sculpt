@@ -21,12 +21,17 @@ def _modules():
     from . import ref_ops
     from . import hair_ops
     from . import validator_ops
+    from . import project_ops
+    from . import handlers
+    from . import palette_ops
+    from . import viz_ops
     from . import workflow_panel
     from . import keymap
     return [
         preferences, pie_menus, rigging, starters, workflow_ops,
         bake_ops, export_ops, manual_retopo_ops, uv_ops, paint_ops,
-        ref_ops, hair_ops, validator_ops, workflow_panel, keymap,
+        ref_ops, hair_ops, validator_ops, project_ops, handlers,
+        palette_ops, viz_ops, workflow_panel, keymap,
     ]
 
 

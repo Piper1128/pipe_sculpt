@@ -428,6 +428,46 @@ _RIG_TABLES: dict = {
 }
 
 
+# Pose presets — applied to humanoid primitives BEFORE _join in starters.py.
+# Each preset names rotation offsets per primitive group (arms / legs / etc.)
+# in radians. The starter applies them to each tagged primitive's local
+# coordinates, so the joined mesh ends up in the posed shape, then voxel
+# remesh fuses it and Generate Rig builds an armature matching that pose.
+#
+# Format: dict[str, dict[str, tuple[float, float, float]]]
+#         pose_name → bone_tag → (rx, ry, rz) in radians
+import math as _math
+
+HUMANOID_POSE_PRESETS: dict = {
+    'T_POSE': {
+        # Default — no rotations. Arms straight out, legs straight down.
+    },
+    'A_POSE': {
+        # Arms angled down ~45° from horizontal for nicer shoulder geometry
+        # post voxel remesh (T-pose's right-angle shoulder is awkward to sculpt).
+        'upper_arm.L': (0.0, _math.radians(45.0),  0.0),
+        'forearm.L':   (0.0, _math.radians(45.0),  0.0),
+        'hand.L':      (0.0, _math.radians(45.0),  0.0),
+        'upper_arm.R': (0.0, _math.radians(-45.0), 0.0),
+        'forearm.R':   (0.0, _math.radians(-45.0), 0.0),
+        'hand.R':      (0.0, _math.radians(-45.0), 0.0),
+    },
+    'IDLE': {
+        # Slight contrapposto: arms relaxed at sides, one hip up
+        'upper_arm.L': (0.0, _math.radians(60.0),  0.0),
+        'forearm.L':   (0.0, _math.radians(60.0),  0.0),
+        'hand.L':      (0.0, _math.radians(60.0),  0.0),
+        'upper_arm.R': (0.0, _math.radians(-60.0), 0.0),
+        'forearm.R':   (0.0, _math.radians(-60.0), 0.0),
+        'hand.R':      (0.0, _math.radians(-60.0), 0.0),
+    },
+}
+
+
+def humanoid_pose_names() -> tuple[str, ...]:
+    return tuple(HUMANOID_POSE_PRESETS.keys())
+
+
 def store_bone_metadata(obj, rig_type: str) -> None:
     """Store the bone hierarchy + IK spec on the joined object as JSON in mesh-local coords."""
     table = _RIG_TABLES.get(rig_type)

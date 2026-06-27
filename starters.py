@@ -160,8 +160,22 @@ class PIPESCULPT_OT_starter_bust(Operator):
 class PIPESCULPT_OT_starter_humanoid(Operator):
     bl_idname = "pipe_sculpt.starter_humanoid"
     bl_label = "Humanoid"
-    bl_description = "Add a T-posed full-body humanoid block (arms outstretched) — voxel remesh fuses parts when you Start Sculpt; T-pose keeps arms separated from torso"
+    bl_description = (
+        "Add a full-body humanoid block. Voxel remesh fuses parts when you "
+        "Start Sculpt. Choose pose (T/A/Idle) — T-pose keeps arms cleanly "
+        "separated for retopology; A-pose gives nicer shoulder geometry"
+    )
     bl_options = {'REGISTER', 'UNDO'}
+
+    pose: bpy.props.EnumProperty(
+        name="Pose",
+        items=[
+            ('T_POSE', "T-Pose (default)", "Arms straight out — easiest for retopology"),
+            ('A_POSE', "A-Pose", "Arms at 45° down — better shoulder topology"),
+            ('IDLE',   "Idle",   "Arms at 60° down — more natural neutral pose"),
+        ],
+        default='T_POSE',
+    )
 
     def execute(self, context):
         _enter_object_mode(context)
@@ -288,10 +302,52 @@ class PIPESCULPT_OT_starter_humanoid(Operator):
                     )
                     parts.append(phalanx)
 
+        # Apply pose preset by rotating tagged primitives around their pivot
+        # before join — produces a posed mesh once voxel-remeshed.
+        pose_offsets = rigging.HUMANOID_POSE_PRESETS.get(self.pose, {})
+        if pose_offsets:
+            self._apply_humanoid_pose(parts, pose_offsets, cx, cy, cz)
+
         _join(torso, *(p for p in parts if p is not torso))
         rigging.store_bone_metadata(torso, 'HUMANOID')
         _finalize(torso, "PipeSculpt_Humanoid")
         return {'FINISHED'}
+
+    def _apply_humanoid_pose(self, parts, pose_offsets, cx, cy, cz):
+        """Rotate tagged primitives in pose_offsets around the shoulder joint.
+
+        Each part's tag tells us which bone it represents; we look up the
+        pose's rotation for that bone, then rotate the part around the
+        appropriate pivot (shoulder for arms, hip for legs).
+        """
+        import mathutils
+
+        # Pivot for each pose-affected bone (in world coords near cursor)
+        pivots = {
+            'upper_arm.L': mathutils.Vector((cx + 0.30, cy, cz + 0.40)),
+            'forearm.L':   mathutils.Vector((cx + 0.30, cy, cz + 0.40)),
+            'hand.L':      mathutils.Vector((cx + 0.30, cy, cz + 0.40)),
+            'upper_arm.R': mathutils.Vector((cx - 0.30, cy, cz + 0.40)),
+            'forearm.R':   mathutils.Vector((cx - 0.30, cy, cz + 0.40)),
+            'hand.R':      mathutils.Vector((cx - 0.30, cy, cz + 0.40)),
+        }
+
+        for part in parts:
+            tag = part.get(rigging.VERTEX_ATTR + "_label") if hasattr(part, 'get') else None
+            # Tags are stored as per-vertex int attribute; identify via name
+            # heuristic since we tag during starter creation
+            name_lower = part.name.lower() if part.name else ""
+            for bone_name, rot in pose_offsets.items():
+                if bone_name.lower().replace('.', '_') in name_lower:
+                    pivot = pivots.get(bone_name, part.location.copy())
+                    # Rotate around pivot
+                    rel = part.location - pivot
+                    rot_mat = mathutils.Euler(rot, 'XYZ').to_matrix()
+                    part.location = pivot + rot_mat @ rel
+                    part.rotation_euler.x += rot[0]
+                    part.rotation_euler.y += rot[1]
+                    part.rotation_euler.z += rot[2]
+                    break
 
 
 class PIPESCULPT_OT_starter_quadruped(Operator):

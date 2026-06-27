@@ -22,6 +22,12 @@ class PIPESCULPT_PT_workflow(Panel):
         is_mesh = obj is not None and obj.type == 'MESH'
         has_subsurf = is_mesh and any(m.type == 'SUBSURF' for m in obj.modifiers)
 
+        # Top — project + reference setup
+        row = layout.row(align=True)
+        row.operator("pipe_sculpt.project_setup", text="New Project", icon='FILE_NEW')
+        row.operator("pipe_sculpt.setup_reference_images", text="Refs", icon='IMAGE_REFERENCE')
+        row.operator("pipe_sculpt.toggle_reference_images", text="", icon='HIDE_OFF')
+
         layout.prop(context.scene, _SCENE_PROP, text="Preset")
 
         # Stage indicator strip — tells the user where they are in the pipeline.
@@ -75,6 +81,9 @@ class PIPESCULPT_PT_workflow(Panel):
         col.operator("pipe_sculpt.paint_setup", icon='BRUSH_DATA')
         col.operator("pipe_sculpt.paint_setup_pbr", icon='NODE_TEXTURE')
         col.operator("pipe_sculpt.paint_save", icon='FILE_TICK')
+        row = col.row(align=True)
+        row.operator("pipe_sculpt.paint_stencil_from_file", text="Stencil", icon='IMAGE_DATA')
+        row.operator("pipe_sculpt.paint_clear_stencil", text="", icon='X')
 
         layout.separator()
         col = layout.column(align=True)
@@ -95,6 +104,7 @@ class PIPESCULPT_PT_workflow(Panel):
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.label(text="Export", icon='EXPORT')
+        col.operator("pipe_sculpt.validate_unity", icon='CHECKMARK')
         col.operator("pipe_sculpt.export_unity_fbx", icon='OUTLINER_OB_MESH')
         col.operator("pipe_sculpt.export_axis_calibration", text="Verify Axis Mode", icon='ORIENTATION_GIMBAL')
 

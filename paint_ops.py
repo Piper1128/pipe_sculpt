@@ -14,8 +14,9 @@ from __future__ import annotations
 import os
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty
+from bpy.props import BoolProperty, EnumProperty, StringProperty
 from bpy.types import Operator
+from bpy_extras.io_utils import ImportHelper
 
 
 PAINT_RESOLUTIONS = (
@@ -325,10 +326,83 @@ class PIPESCULPT_OT_paint_save(Operator):
         return {'FINISHED'}
 
 
+class PIPESCULPT_OT_paint_stencil_from_file(Operator, ImportHelper):
+    bl_idname = "pipe_sculpt.paint_stencil_from_file"
+    bl_label = "Stencil from File"
+    bl_description = (
+        "Drop an image file as a projection stencil for the active brush. "
+        "Use to project a photo or hand-drawn texture onto the 3D mesh "
+        "via Ctrl+drag — the stencil snaps to the camera view"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filename_ext = ""
+    filter_glob: StringProperty(
+        default="*.png;*.jpg;*.jpeg;*.tga;*.tiff;*.bmp;*.exr",
+        options={'HIDDEN'},
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'PAINT_TEXTURE'
+
+    def execute(self, context):
+        if not self.filepath:
+            self.report({'ERROR'}, "No file picked")
+            return {'CANCELLED'}
+
+        img = bpy.data.images.load(self.filepath, check_existing=True)
+        ts = context.tool_settings.image_paint
+        brush = ts.brush
+        if brush is None:
+            self.report({'ERROR'}, "No active brush — pick one first")
+            return {'CANCELLED'}
+
+        # Find or create a brush texture wrapping the image
+        tex_name = f"PipeSculpt_Stencil_{img.name}"
+        tex = bpy.data.textures.get(tex_name)
+        if tex is None:
+            tex = bpy.data.textures.new(tex_name, type='IMAGE')
+        tex.image = img
+
+        # Wire as the brush's TEXTURE slot (used for stencil + projection)
+        brush.texture = tex
+        brush.texture_slot.map_mode = 'STENCIL'
+
+        self.report(
+            {'INFO'},
+            f"Stencil '{img.name}' loaded. Use right-click + drag to "
+            "reposition, Shift+right-click + drag to scale",
+        )
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_paint_clear_stencil(Operator):
+    bl_idname = "pipe_sculpt.paint_clear_stencil"
+    bl_label = "Clear Stencil"
+    bl_description = "Remove the stencil texture from the active brush"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        if context.mode != 'PAINT_TEXTURE':
+            return False
+        ts = context.tool_settings.image_paint
+        return ts.brush is not None and ts.brush.texture is not None
+
+    def execute(self, context):
+        ts = context.tool_settings.image_paint
+        ts.brush.texture = None
+        self.report({'INFO'}, "Stencil cleared")
+        return {'FINISHED'}
+
+
 _classes = (
     PIPESCULPT_OT_paint_setup,
     PIPESCULPT_OT_paint_setup_pbr,
     PIPESCULPT_OT_paint_save,
+    PIPESCULPT_OT_paint_stencil_from_file,
+    PIPESCULPT_OT_paint_clear_stencil,
 )
 
 
