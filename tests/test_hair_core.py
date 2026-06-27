@@ -8,11 +8,28 @@ Run with:
 """
 from __future__ import annotations
 
+import math
+import random
+
 import pytest
 
 # hair_core is preloaded by conftest.py via importlib's file-loader so we
 # don't have to trigger pipe_sculpt/__init__.py (which imports bpy).
 import hair_core as hc  # noqa: E402
+
+
+# A unit quad in the XY plane, split into two triangles, normals = +Z.
+# Total area = 1.0 m² — handy for density math.
+def _unit_quad_triangles():
+    v00 = (0.0, 0.0, 0.0)
+    v10 = (1.0, 0.0, 0.0)
+    v11 = (1.0, 1.0, 0.0)
+    v01 = (0.0, 1.0, 0.0)
+    up = (0.0, 0.0, 1.0)
+    return [
+        (v00, v10, v11, up, up, up),
+        (v00, v11, v01, up, up, up),
+    ]
 
 
 class TestPresets:
@@ -154,3 +171,183 @@ class TestPaintedAreaDensity:
         scalp = hc.get_preset('SCALP')
         # Defensive — negative multiplier shouldn't produce negative strand counts
         assert hc.select_density_for_painted_area(0.06, scalp, density_multiplier=-1.0) == hc.MIN_STRANDS
+
+
+class TestVectorHelpers:
+    def test_triangle_area_unit(self):
+        # Right triangle with legs 1.0 → area 0.5
+        a = hc.triangle_area((0, 0, 0), (1, 0, 0), (0, 1, 0))
+        assert a == pytest.approx(0.5)
+
+    def test_unit_quad_total_area(self):
+        tris = _unit_quad_triangles()
+        total = sum(hc.triangle_area(t[0], t[1], t[2]) for t in tris)
+        assert total == pytest.approx(1.0)
+
+    def test_degenerate_triangle_zero_area(self):
+        # All points collinear → zero area
+        a = hc.triangle_area((0, 0, 0), (1, 0, 0), (2, 0, 0))
+        assert a == pytest.approx(0.0)
+
+    def test_normalize_unit(self):
+        n = hc._normalize((3.0, 0.0, 0.0))
+        assert n == pytest.approx((1.0, 0.0, 0.0))
+
+    def test_normalize_degenerate_returns_up(self):
+        n = hc._normalize((0.0, 0.0, 0.0))
+        assert n == (0.0, 0.0, 1.0)
+
+
+class TestAreaCDF:
+    def test_empty_areas(self):
+        assert hc.build_area_cdf([]) == []
+
+    def test_zero_total(self):
+        assert hc.build_area_cdf([0.0, 0.0]) == []
+
+    def test_cdf_ends_at_one(self):
+        cdf = hc.build_area_cdf([1.0, 3.0])
+        assert cdf[-1] == 1.0
+
+    def test_cdf_monotonic(self):
+        cdf = hc.build_area_cdf([2.0, 1.0, 3.0, 0.5])
+        for i in range(1, len(cdf)):
+            assert cdf[i] >= cdf[i - 1]
+
+    def test_cdf_proportions(self):
+        # Areas 1:3 → first boundary at 0.25
+        cdf = hc.build_area_cdf([1.0, 3.0])
+        assert cdf[0] == pytest.approx(0.25)
+
+
+class TestPickTriangle:
+    def test_empty_cdf_returns_minus_one(self):
+        assert hc.pick_triangle([], 0.5) == -1
+
+    def test_picks_first_bucket(self):
+        cdf = [0.25, 1.0]
+        assert hc.pick_triangle(cdf, 0.1) == 0
+        assert hc.pick_triangle(cdf, 0.25) == 0
+
+    def test_picks_second_bucket(self):
+        cdf = [0.25, 1.0]
+        assert hc.pick_triangle(cdf, 0.5) == 1
+        assert hc.pick_triangle(cdf, 1.0) == 1
+
+    def test_area_weighting_is_proportional(self):
+        # Big second triangle (area 9 vs 1) should get ~90% of picks
+        cdf = hc.build_area_cdf([1.0, 9.0])
+        rng = random.Random(42)
+        picks = [hc.pick_triangle(cdf, rng.random()) for _ in range(10000)]
+        frac_second = sum(1 for p in picks if p == 1) / len(picks)
+        assert 0.86 < frac_second < 0.94
+
+
+class TestBarycentric:
+    def test_inside_lower_triangle(self):
+        # r1+r2 <= 1 stays as-is
+        w = hc.sample_barycentric(0.2, 0.3)
+        assert w == pytest.approx((0.5, 0.2, 0.3))
+        assert sum(w) == pytest.approx(1.0)
+
+    def test_folds_upper_triangle(self):
+        # r1+r2 > 1 reflects
+        w = hc.sample_barycentric(0.8, 0.7)
+        assert sum(w) == pytest.approx(1.0)
+        assert all(c >= 0 for c in w)
+
+    def test_weights_always_sum_to_one(self):
+        rng = random.Random(7)
+        for _ in range(1000):
+            w = hc.sample_barycentric(rng.random(), rng.random())
+            assert sum(w) == pytest.approx(1.0)
+            assert all(c >= -1e-9 for c in w)
+
+
+class TestSampleSurfaceStrands:
+    def test_zero_count_empty(self):
+        assert hc.sample_surface_strands(_unit_quad_triangles(), 0, random.Random(1)) == []
+
+    def test_no_triangles_empty(self):
+        assert hc.sample_surface_strands([], 100, random.Random(1)) == []
+
+    def test_count_matches(self):
+        strands = hc.sample_surface_strands(_unit_quad_triangles(), 500, random.Random(1))
+        assert len(strands) == 500
+
+    def test_roots_lie_on_surface_plane(self):
+        # Unit quad is at z=0; all roots should have z≈0
+        strands = hc.sample_surface_strands(_unit_quad_triangles(), 200, random.Random(1))
+        for s in strands:
+            assert abs(s.root[2]) < 1e-9
+
+    def test_roots_inside_unit_square(self):
+        strands = hc.sample_surface_strands(_unit_quad_triangles(), 200, random.Random(1))
+        for s in strands:
+            assert -1e-9 <= s.root[0] <= 1.0 + 1e-9
+            assert -1e-9 <= s.root[1] <= 1.0 + 1e-9
+
+    def test_normals_point_up(self):
+        strands = hc.sample_surface_strands(_unit_quad_triangles(), 50, random.Random(1))
+        for s in strands:
+            assert s.normal == pytest.approx((0.0, 0.0, 1.0))
+
+    def test_deterministic_with_same_seed(self):
+        tris = _unit_quad_triangles()
+        a = hc.sample_surface_strands(tris, 100, random.Random(99))
+        b = hc.sample_surface_strands(tris, 100, random.Random(99))
+        assert a == b
+
+
+class TestStrandPolyline:
+    def test_point_count(self):
+        pts = hc.strand_polyline((0, 0, 0), (0, 0, 1), 0.1, 6, 0.0, random.Random(1))
+        assert len(pts) == 7  # segments + 1
+
+    def test_minimum_one_segment(self):
+        pts = hc.strand_polyline((0, 0, 0), (0, 0, 1), 0.1, 0, 0.0, random.Random(1))
+        assert len(pts) == 2  # clamped to 1 segment
+
+    def test_root_is_first_point(self):
+        root = (0.3, 0.4, 0.0)
+        pts = hc.strand_polyline(root, (0, 0, 1), 0.1, 4, 0.0, random.Random(1))
+        assert pts[0] == pytest.approx(root)
+
+    def test_no_jitter_is_straight(self):
+        # Without jitter the tip is exactly length along the normal
+        pts = hc.strand_polyline((0, 0, 0), (0, 0, 1), 0.2, 4, 0.0, random.Random(1))
+        assert pts[-1] == pytest.approx((0.0, 0.0, 0.2))
+
+    def test_no_jitter_evenly_spaced(self):
+        pts = hc.strand_polyline((0, 0, 0), (0, 0, 1), 0.4, 4, 0.0, random.Random(1))
+        # Each step should be 0.1 in z
+        for i, p in enumerate(pts):
+            assert p[2] == pytest.approx(0.1 * i)
+
+    def test_jitter_perturbs(self):
+        straight = hc.strand_polyline((0, 0, 0), (0, 0, 1), 0.2, 4, 0.0, random.Random(1))
+        jittered = hc.strand_polyline((0, 0, 0), (0, 0, 1), 0.2, 4, 0.5, random.Random(1))
+        # Tip should differ once jitter is applied
+        assert jittered[-1] != straight[-1]
+
+
+class TestBuildStrandsGeometry:
+    def test_full_pipeline_count(self):
+        tris = _unit_quad_triangles()
+        preset = hc.get_preset('FUR_SHORT')
+        strands = hc.build_strands_geometry(tris, 100, preset, random.Random(3))
+        assert len(strands) == 100
+        # Each strand has segments+1 points
+        for s in strands:
+            assert len(s) == preset.segments + 1
+
+    def test_scale_affects_length(self):
+        tris = _unit_quad_triangles()
+        preset = hc.get_preset('EYEBROW')  # no jitter → deterministic length
+        normal = hc.build_strands_geometry(tris, 10, preset, random.Random(5), mesh_scale=1.0)
+        scaled = hc.build_strands_geometry(tris, 10, preset, random.Random(5), mesh_scale=2.0)
+        # First strand tip distance from root should double
+        def tip_dist(strand):
+            r, t = strand[0], strand[-1]
+            return hc._length(hc._sub(t, r))
+        assert tip_dist(scaled[0]) == pytest.approx(tip_dist(normal[0]) * 2.0)

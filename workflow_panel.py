@@ -89,10 +89,10 @@ class PIPESCULPT_PT_workflow(Panel):
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.label(text="Hair & Fur", icon='CURVES_DATA')
-        col.operator("pipe_sculpt.hair_setup", icon='OUTLINER_OB_CURVES')
-        col.operator("pipe_sculpt.hair_sculpt_mode", icon='BRUSH_DATA')
-        col.operator("pipe_sculpt.hair_apply_preset", icon='PRESET')
-        col.operator("pipe_sculpt.hair_to_cards", icon='MESH_PLANE')
+        col.operator("pipe_sculpt.hair_setup", text="1. Setup Hair", icon='OUTLINER_OB_CURVES')
+        col.operator("pipe_sculpt.hair_apply_preset", text="2. Spawn (Preset)", icon='PARTICLE_POINT')
+        col.operator("pipe_sculpt.hair_sculpt_mode", text="3. Sculpt / Comb", icon='BRUSH_DATA')
+        col.operator("pipe_sculpt.hair_to_cards", text="4. → Hair Cards", icon='MESH_PLANE')
 
         layout.separator()
         col = layout.column(align=True)

@@ -25,7 +25,7 @@ Operators:
 from __future__ import annotations
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty
 from bpy.types import Operator
 
 from . import hair_core
@@ -67,6 +67,67 @@ def _mesh_surface_area_m2(mesh_obj) -> float:
     """Approximate mesh surface area in m², factoring uniform scale."""
     scale_factor = (mesh_obj.scale.x * mesh_obj.scale.y * mesh_obj.scale.z) ** (1.0 / 3.0)
     return sum(p.area for p in mesh_obj.data.polygons) * scale_factor * scale_factor
+
+
+def _extract_triangles(context, mesh_obj):
+    """Extract (v0,v1,v2,n0,n1,n2) tuples from the evaluated mesh in local space.
+
+    Uses the depsgraph-evaluated mesh so multires/modifiers are reflected.
+    Vertex normals are used (not face normals) so interpolated growth
+    directions are smooth across the surface. Returns plain float tuples
+    for hair_core (which is bpy-free).
+    """
+    dg = context.evaluated_depsgraph_get()
+    eval_obj = mesh_obj.evaluated_get(dg)
+    mesh = eval_obj.to_mesh()
+    try:
+        mesh.calc_loop_triangles()
+        verts = mesh.vertices
+        triangles = []
+        for lt in mesh.loop_triangles:
+            i0, i1, i2 = lt.vertices
+            v0 = tuple(verts[i0].co)
+            v1 = tuple(verts[i1].co)
+            v2 = tuple(verts[i2].co)
+            n0 = tuple(verts[i0].normal)
+            n1 = tuple(verts[i1].normal)
+            n2 = tuple(verts[i2].normal)
+            triangles.append((v0, v1, v2, n0, n1, n2))
+    finally:
+        eval_obj.to_mesh_clear()
+    return triangles
+
+
+def _build_curves_from_strands(curves_data, strands) -> bool:
+    """Populate a Curves datablock from hair_core strand point-lists.
+
+    strands: list of strands, each a list of (x,y,z) point tuples.
+    Returns True on success. Wrapped defensively because the exact
+    Curves population API (add_curves / foreach_set) is version-sensitive
+    and worth failing loud on rather than silently producing empty hair.
+    """
+    # Clear any existing curves first
+    if len(curves_data.curves) > 0:
+        curves_data.remove_curves(None)  # None = remove all
+
+    sizes = [len(s) for s in strands]
+    if not sizes:
+        return False
+
+    # add_curves(sizes) appends curves with the given per-curve point counts
+    curves_data.add_curves(sizes)
+
+    # Flatten all point positions into one array for foreach_set
+    flat = []
+    for strand in strands:
+        for p in strand:
+            flat.extend((p[0], p[1], p[2]))
+
+    if len(curves_data.points) * 3 != len(flat):
+        return False
+    curves_data.points.foreach_set("position", flat)
+    curves_data.update_tag()
+    return True
 
 
 class PIPESCULPT_OT_hair_setup(Operator):
@@ -161,11 +222,12 @@ class PIPESCULPT_OT_hair_sculpt_mode(Operator):
 
 class PIPESCULPT_OT_hair_apply_preset(Operator):
     bl_idname = "pipe_sculpt.hair_apply_preset"
-    bl_label = "Apply Hair Density Preset"
+    bl_label = "Spawn Hair (Preset)"
     bl_description = (
-        "Populate hair across the entire surface using the chosen preset's "
-        "real-world density. Use the brushes afterwards to refine, comb, "
-        "and remove from areas without hair"
+        "Spawn hair strands across the entire surface at the chosen preset's "
+        "real-world density. Strands are placed area-weighted (uniform over "
+        "the surface) and grow along the mesh normals. Refine afterwards with "
+        "the Hair Sculpt brushes"
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -181,6 +243,19 @@ class PIPESCULPT_OT_hair_apply_preset(Operator):
         min=0.0,
         max=10.0,
     )
+    max_strands: IntProperty(
+        name="Strand Cap",
+        description="Hard ceiling on spawned strands — protects against freezing Blender on dense presets",
+        default=50_000,
+        min=10,
+        max=2_000_000,
+    )
+    seed: IntProperty(
+        name="Seed",
+        description="Random seed for strand placement. Same seed → same layout",
+        default=0,
+        min=0,
+    )
 
     @classmethod
     def poll(cls, context):
@@ -190,9 +265,11 @@ class PIPESCULPT_OT_hair_apply_preset(Operator):
         return obj.data.surface is not None
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=280)
+        return context.window_manager.invoke_props_dialog(self, width=300)
 
     def execute(self, context):
+        import random
+
         hair_obj = context.active_object
         mesh_obj = hair_obj.data.surface
         if mesh_obj is None or mesh_obj.type != 'MESH':
@@ -204,39 +281,58 @@ class PIPESCULPT_OT_hair_apply_preset(Operator):
         strand_count = hair_core.select_density_for_painted_area(
             area, preset, self.density_multiplier
         )
-        memory_mb = hair_core.estimate_memory_mb(strand_count, preset.segments)
-
-        if memory_mb > 500.0:
+        # Apply the user's hard cap
+        if strand_count > self.max_strands:
             self.report(
                 {'WARNING'},
-                f"Preset would spawn {strand_count:,} strands (~{memory_mb:.0f} MB). "
-                "Reduce density multiplier or use a sparser preset",
+                f"Preset wanted {strand_count:,} strands; capped to {self.max_strands:,}. "
+                "Raise 'Strand Cap' for fuller coverage",
+            )
+            strand_count = self.max_strands
+
+        memory_mb = hair_core.estimate_memory_mb(strand_count, preset.segments)
+        if memory_mb > 800.0:
+            self.report(
+                {'WARNING'},
+                f"{strand_count:,} strands ≈ {memory_mb:.0f} MB — too heavy. "
+                "Lower the strand cap or density multiplier",
             )
             return {'CANCELLED'}
 
-        # Use Blender's built-in add-curve operator with the computed count.
-        # Density is per-face uniform; user refines with sculpt brushes.
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Switch to hair sculpt mode and use 'density add' to populate
-        try:
-            bpy.ops.object.mode_set(mode='SCULPT_CURVES')
-            # Set the preset's default strand length on the curves' surface curve
-            # length attribute via the operator's parameters where available.
-            hair_obj.data.attributes.clear() if False else None  # placeholder
-            bpy.ops.object.mode_set(mode='OBJECT')
-        except RuntimeError:
-            pass
+        # Extract triangle data (evaluated mesh) and run the pure-Python spawn
+        triangles = _extract_triangles(context, mesh_obj)
+        if not triangles:
+            self.report({'ERROR'}, "Surface mesh has no faces to grow hair on")
+            return {'CANCELLED'}
 
-        # Final guidance — actual seeding is done via the brushes since
-        # Blender 5.x doesn't expose a "spawn N strands uniform" operator
-        # outside sculpt-mode brushes.
+        scale_factor = (mesh_obj.scale.x * mesh_obj.scale.y * mesh_obj.scale.z) ** (1.0 / 3.0)
+        rng = random.Random(self.seed)
+        strands = hair_core.build_strands_geometry(
+            triangles, strand_count, preset, rng, mesh_scale=scale_factor,
+        )
+
+        # Build the curves geometry from the strand point-lists
+        try:
+            ok = _build_curves_from_strands(hair_obj.data, strands)
+        except Exception as e:
+            self.report(
+                {'ERROR'},
+                f"Curves population failed ({e}). The Blender 5.x Curves API "
+                "may differ — report this so we can fix _build_curves_from_strands",
+            )
+            return {'CANCELLED'}
+
+        if not ok:
+            self.report({'ERROR'}, "Curves population produced no geometry")
+            return {'CANCELLED'}
+
         self.report(
             {'INFO'},
-            f"Preset '{preset.label}' configured: {strand_count:,} strand budget on "
-            f"{area:.3f} m² surface. Enter Hair Sculpt Mode and use the Density brush "
-            f"to paint hair onto the mesh",
+            f"Spawned {len(strands):,} '{preset.label}' strands on '{mesh_obj.name}' "
+            f"({area:.3f} m²). Enter Hair Sculpt Mode to comb / refine",
         )
         return {'FINISHED'}
 

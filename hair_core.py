@@ -223,3 +223,198 @@ def select_density_for_painted_area(
         use_jitter=base_preset.use_jitter,
     )
     return strand_count_for(area_m2, scaled)
+
+
+# ======================================================================
+# Native spawn — surface sampling + strand geometry generation
+#
+# All pure Python (plain float tuples, no mathutils — that's Blender-only).
+# Randomness is injected via a `random.Random`-like rng so spawning is
+# deterministic and unit-testable (IRandom convention from IronCore).
+# The bpy wrapper extracts triangle data from the evaluated mesh, calls
+# sample_surface_strands() + strand_polyline(), then builds Curves geometry.
+# ======================================================================
+
+Vec3 = tuple  # (float, float, float) — documented alias
+
+
+def _sub(a: Vec3, b: Vec3) -> Vec3:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _add(a: Vec3, b: Vec3) -> Vec3:
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def _scale(a: Vec3, s: float) -> Vec3:
+    return (a[0] * s, a[1] * s, a[2] * s)
+
+
+def _cross(a: Vec3, b: Vec3) -> Vec3:
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def _length(a: Vec3) -> float:
+    import math
+    return math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+
+
+def _normalize(a: Vec3) -> Vec3:
+    ln = _length(a)
+    if ln < 1e-12:
+        return (0.0, 0.0, 1.0)  # degenerate → default up
+    return (a[0] / ln, a[1] / ln, a[2] / ln)
+
+
+def triangle_area(v0: Vec3, v1: Vec3, v2: Vec3) -> float:
+    """Area of a triangle from its three corner positions."""
+    return 0.5 * _length(_cross(_sub(v1, v0), _sub(v2, v0)))
+
+
+@dataclass(frozen=True)
+class SampledStrand:
+    """One spawned strand: a root position on the surface + growth normal."""
+    root: Vec3
+    normal: Vec3
+
+
+def build_area_cdf(tri_areas: Sequence[float]) -> list[float]:
+    """Cumulative distribution (normalised to 1.0) of triangle areas.
+
+    Used to pick a triangle weighted by its area so strands distribute
+    uniformly over the *surface*, not uniformly per-triangle (which would
+    over-populate small triangles).
+    """
+    total = sum(tri_areas)
+    if total <= 0:
+        return []
+    cdf = []
+    running = 0.0
+    for a in tri_areas:
+        running += a
+        cdf.append(running / total)
+    cdf[-1] = 1.0  # guard against float drift
+    return cdf
+
+
+def pick_triangle(cdf: Sequence[float], r: float) -> int:
+    """Binary-search the area CDF for the triangle containing fraction `r`."""
+    if not cdf:
+        return -1
+    lo, hi = 0, len(cdf) - 1
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if r <= cdf[mid]:
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo
+
+
+def sample_barycentric(r1: float, r2: float) -> tuple[float, float, float]:
+    """Uniform barycentric coordinates inside a triangle from two [0,1] rands.
+
+    The standard fold trick: if r1+r2 > 1, reflect into the lower triangle
+    so the distribution stays uniform over the whole triangle.
+    """
+    if r1 + r2 > 1.0:
+        r1 = 1.0 - r1
+        r2 = 1.0 - r2
+    return (1.0 - r1 - r2, r1, r2)
+
+
+def _bary_interp(a: Vec3, b: Vec3, c: Vec3, w: tuple[float, float, float]) -> Vec3:
+    return _add(_add(_scale(a, w[0]), _scale(b, w[1])), _scale(c, w[2]))
+
+
+def sample_surface_strands(triangles: Sequence, count: int, rng) -> list[SampledStrand]:
+    """Sample `count` strand roots over the triangulated surface.
+
+    triangles: sequence of (v0, v1, v2, n0, n1, n2) where v* are corner
+               positions and n* are corner normals (all Vec3 tuples).
+    rng:       a random.Random-like object exposing .random() → [0,1).
+
+    Returns a list of SampledStrand (root position + interpolated, normalised
+    growth normal). Area-weighted so strands cover the surface uniformly.
+    """
+    if count <= 0 or not triangles:
+        return []
+
+    areas = [triangle_area(t[0], t[1], t[2]) for t in triangles]
+    cdf = build_area_cdf(areas)
+    if not cdf:
+        return []
+
+    strands: list[SampledStrand] = []
+    for _ in range(count):
+        tri_idx = pick_triangle(cdf, rng.random())
+        if tri_idx < 0:
+            continue
+        t = triangles[tri_idx]
+        w = sample_barycentric(rng.random(), rng.random())
+        root = _bary_interp(t[0], t[1], t[2], w)
+        normal = _normalize(_bary_interp(t[3], t[4], t[5], w))
+        strands.append(SampledStrand(root, normal))
+    return strands
+
+
+def strand_polyline(
+    root: Vec3,
+    normal: Vec3,
+    length: float,
+    segments: int,
+    jitter_amount: float,
+    rng,
+) -> list[Vec3]:
+    """Build the (segments+1) points of one strand growing along `normal`.
+
+    Point 0 is the root on the surface; the rest step outward along the
+    (optionally jittered) normal. jitter_amount in [0,1] perturbs the
+    growth direction and per-strand length for a natural look — 0 gives
+    perfectly straight, uniform strands (eyebrows / feathers).
+    """
+    segs = max(1, segments)
+    direction = normal
+    actual_length = length
+
+    if jitter_amount > 0.0:
+        # Perturb direction by a small random offset, re-normalise
+        jx = (rng.random() - 0.5) * jitter_amount
+        jy = (rng.random() - 0.5) * jitter_amount
+        jz = (rng.random() - 0.5) * jitter_amount
+        direction = _normalize(_add(normal, (jx, jy, jz)))
+        # Vary length ±jitter_amount * 30 %
+        length_var = 1.0 + (rng.random() - 0.5) * jitter_amount * 0.6
+        actual_length = length * length_var
+
+    points: list[Vec3] = []
+    for i in range(segs + 1):
+        t = i / segs
+        points.append(_add(root, _scale(direction, actual_length * t)))
+    return points
+
+
+def build_strands_geometry(
+    triangles: Sequence,
+    count: int,
+    preset: HairPreset,
+    rng,
+    mesh_scale: float = 1.0,
+) -> list[list[Vec3]]:
+    """Full native-spawn pipeline: sample roots → build every strand polyline.
+
+    Returns a list of strands, each a list of (segments+1) Vec3 points.
+    The bpy wrapper flattens this into a Curves datablock. mesh_scale
+    scales strand length so a 0.5x mesh gets proportional hair.
+    """
+    sampled = sample_surface_strands(triangles, count, rng)
+    jitter = 0.4 if preset.use_jitter else 0.0
+    length = preset.strand_length * max(mesh_scale, 0.0001)
+    return [
+        strand_polyline(s.root, s.normal, length, preset.segments, jitter, rng)
+        for s in sampled
+    ]
