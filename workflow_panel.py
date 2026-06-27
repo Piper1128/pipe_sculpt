@@ -79,6 +79,15 @@ class PIPESCULPT_PT_workflow(Panel):
         layout.separator()
         col = layout.column(align=True)
         col.scale_y = 1.4
+        col.label(text="Hair & Fur", icon='CURVES_DATA')
+        col.operator("pipe_sculpt.hair_setup", icon='OUTLINER_OB_CURVES')
+        col.operator("pipe_sculpt.hair_sculpt_mode", icon='BRUSH_DATA')
+        col.operator("pipe_sculpt.hair_apply_preset", icon='PRESET')
+        col.operator("pipe_sculpt.hair_to_cards", icon='MESH_PLANE')
+
+        layout.separator()
+        col = layout.column(align=True)
+        col.scale_y = 1.4
         col.label(text="Genesis-Tracked Rigging", icon='ARMATURE_DATA')
         col.operator("pipe_sculpt.generate_rig", icon='OUTLINER_OB_ARMATURE')
 
