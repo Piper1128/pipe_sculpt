@@ -99,6 +99,25 @@ Removes the 5+ click texture-paint setup that loses Blender beginners.
 - **Save Painted Textures** — saves all dirty paint textures on the active
   mesh to `<blend_dir>/textures/`. Reports save / overwrite / skip counts.
 
+### Animation (Phase 1)
+An "Animate" panel (pose-mode only) with pose / keying / loop quick-tools
+for animating GTR rigs toward Unity export. Pure logic in `anim_core.py`
+(headless-tested), thin operators in `anim_ops.py`.
+
+- **Pose:** Copy / Paste / Paste-Flipped / Mirror (one-click L↔R) / Reset to
+  rest. Mirror uses `(w, x, -y, -z)` quaternion + negated-X location, verified
+  correct for GTR's mirror-symmetric `.L`/`.R` bones.
+- **Key:** Key Whole Rig / Key Selected / Toggle Stepped↔Spline (blocking vs
+  spline interpolation) / Fit Preview Range.
+- **Loop:** Validate Loop (diffs first vs last frame, reports the bones that
+  "pop" — loop errors visible in Blender, not Unity), Make Cyclic (closes the
+  loop + Cycles modifier), Bake In-Place (strips root XY translation for Unity
+  Bake-Into-Pose; keeps Z).
+
+Built on a spike of Blender 5.1's slotted-action API: `action.fcurves` was
+removed in 5.x, so F-curves are accessed via channelbags
+(`action.layers[].strips[].channelbag(slot).fcurves`) with a legacy fallback.
+
 ### Manual retopology helper
 For cases where Quadriflow gives bad topology (faces, hard-surface, mech):
 

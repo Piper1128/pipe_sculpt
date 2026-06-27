@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty
-from bpy.types import Operator
+from bpy.types import Operator, Panel
 
 from . import anim_core
 
@@ -529,6 +529,55 @@ class PIPESCULPT_OT_anim_bake_in_place(Operator):
         return {'FINISHED'}
 
 
+# ======================================================================
+# Animate panel — pose-mode only (sits between Rigging and Export)
+# ======================================================================
+
+class PIPESCULPT_PT_animate(Panel):
+    bl_idname = "PIPESCULPT_PT_animate"
+    bl_label = "Animate"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "PipeSculpt"
+    bl_order = 15  # between Workflow Pipeline (10) and Quick Palette (20)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and obj.type == 'ARMATURE' and context.mode == 'POSE'
+
+    def draw(self, context):
+        layout = self.layout
+
+        col = layout.column(align=True)
+        col.label(text="Pose", icon='POSE_HLT')
+        row = col.row(align=True)
+        row.operator("pipe_sculpt.anim_copy_pose", text="Copy")
+        op = row.operator("pipe_sculpt.anim_paste_pose", text="Paste")
+        op.mirror = False
+        op = row.operator("pipe_sculpt.anim_paste_pose", text="Paste Flip")
+        op.mirror = True
+        row = col.row(align=True)
+        row.operator("pipe_sculpt.anim_mirror_pose", text="Mirror", icon='MOD_MIRROR')
+        row.operator("pipe_sculpt.anim_reset_pose", text="Rest", icon='LOOP_BACK')
+
+        layout.separator()
+        col = layout.column(align=True)
+        col.label(text="Key", icon='KEYINGSET')
+        row = col.row(align=True)
+        row.operator("pipe_sculpt.anim_key_rig", text="Key Rig")
+        row.operator("pipe_sculpt.anim_key_selected", text="Key Sel")
+        col.operator("pipe_sculpt.anim_toggle_interp", icon='IPO_CONSTANT')
+        col.operator("pipe_sculpt.anim_fit_range", icon='PREVIEW_RANGE')
+
+        layout.separator()
+        col = layout.column(align=True)
+        col.label(text="Loop", icon='FILE_REFRESH')
+        col.operator("pipe_sculpt.anim_validate_loop", icon='CHECKMARK')
+        col.operator("pipe_sculpt.anim_make_cyclic", icon='FORCE_HARMONIC')
+        col.operator("pipe_sculpt.anim_bake_in_place", icon='ANIM')
+
+
 _pose_classes = (
     PIPESCULPT_OT_anim_copy_pose,
     PIPESCULPT_OT_anim_paste_pose,
@@ -541,6 +590,7 @@ _pose_classes = (
     PIPESCULPT_OT_anim_validate_loop,
     PIPESCULPT_OT_anim_make_cyclic,
     PIPESCULPT_OT_anim_bake_in_place,
+    PIPESCULPT_PT_animate,
 )
 
 
