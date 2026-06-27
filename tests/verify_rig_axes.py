@@ -27,6 +27,7 @@ if _ADDON_ROOT not in sys.path:
     sys.path.insert(0, _ADDON_ROOT)
 
 import rigging  # noqa: E402
+import anim_core  # noqa: E402  (bpy-free, imports fine in Blender too)
 
 
 SEP = "=" * 70
@@ -177,6 +178,35 @@ def _report_chest(serialized):
     print()
 
 
+def _report_mirror_consistency():
+    print(SEP)
+    print("ANIM — mirror-mapping mod DEFORM_BONE_NAMES (Fase 1 pose-mirror)")
+    print(SEP)
+    names = rigging.DEFORM_BONE_NAMES
+    problems = 0
+    centerline = []
+    paired = 0
+    for name in names:
+        twin = anim_core.mirror_bone_name(name)
+        if twin is None:
+            centerline.append(name)
+            continue
+        if twin not in names:
+            print(f"  '{name}' mirror '{twin}' MANGLER i DEFORM_BONE_NAMES — asymmetrisk rig")
+            problems += 1
+        else:
+            paired += 1
+    print(f"  L/R-bones med korrekt modpart: {paired}")
+    print(f"  Centerline-bones (ingen mirror): {len(centerline)}")
+    print(f"    -> {', '.join(sorted(centerline))}")
+    if problems == 0:
+        print("  >> Mirror-mapping komplet: hver .L/.R-bone har sin modpart,")
+        print("     resten er centerline. Pose-mirror vil aldrig ramme en tom bone.")
+    else:
+        print(f"  >> {problems} MIRROR-PROBLEM(ER) — se ovenfor.")
+    print()
+
+
 def main():
     print("\n" + SEP)
     print("GTR RIG VERIFICATION — Blender", bpy.app.version_string)
@@ -190,6 +220,7 @@ def main():
     _report_chest(serialized)
     _report_control_bones(serialized)
     _report_table_consistency()
+    _report_mirror_consistency()
 
     print(SEP)
     print("Færdig. Sammenhold tallene med GTR_RIG_REVIEW.md fund A/B/C.")
