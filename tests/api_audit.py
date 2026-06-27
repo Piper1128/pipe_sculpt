@@ -176,6 +176,35 @@ def _anim_pose_tools():
 
 check("anim pose tools (copy/mirror/reset)", _anim_pose_tools)
 
+
+def _anim_keying_loop_breakdown():
+    # Keys two frames, then exercises the slotted-action fcurve path:
+    # key rig, make cyclic, validate loop, toggle interp, breakdown (exec).
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    sc = bpy.context.scene
+    sc.frame_set(1)
+    bpy.ops.pipe_sculpt.anim_key_rig()
+    pb = arm.pose.bones["upper_arm.L"]
+    pb.rotation_mode = 'QUATERNION'
+    sc.frame_set(10)
+    pb.rotation_quaternion = (0.9, 0.4, 0.0, 0.0)
+    bpy.ops.pipe_sculpt.anim_key_rig()
+    bpy.ops.pipe_sculpt.anim_fit_range()
+    bpy.ops.pipe_sculpt.anim_validate_loop('EXEC_DEFAULT')
+    bpy.ops.pipe_sculpt.anim_toggle_interp()
+    sc.frame_set(5)
+    bpy.ops.pose.select_all(action='SELECT')
+    bpy.ops.pipe_sculpt.anim_breakdown('EXEC_DEFAULT', blend=0.5)
+    bpy.ops.pipe_sculpt.anim_make_cyclic('EXEC_DEFAULT')
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+check("anim keying/loop/breakdown (channelbag fcurves)", _anim_keying_loop_breakdown)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")

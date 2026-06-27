@@ -107,6 +107,36 @@ class TestBreakdownQuat:
         assert result[0] > 0
 
 
+class TestFindBracketingValues:
+    def test_no_keys_none(self):
+        assert ac.find_bracketing_values([], 5.0) is None
+
+    def test_frame_between_two_keys(self):
+        keys = [(1, 10.0), (10, 20.0)]
+        assert ac.find_bracketing_values(keys, 5.0) == (10.0, 20.0)
+
+    def test_frame_on_middle_key_uses_neighbours(self):
+        # Key exactly on frame 5 is skipped; neighbours are 1 and 10
+        keys = [(1, 10.0), (5, 15.0), (10, 20.0)]
+        assert ac.find_bracketing_values(keys, 5.0) == (10.0, 20.0)
+
+    def test_frame_before_all_keys(self):
+        keys = [(5, 1.0), (10, 2.0)]
+        # No previous → both clamp to first
+        assert ac.find_bracketing_values(keys, 1.0) == (1.0, 1.0)
+
+    def test_frame_after_all_keys(self):
+        keys = [(1, 1.0), (5, 2.0)]
+        assert ac.find_bracketing_values(keys, 10.0) == (2.0, 2.0)
+
+    def test_single_key(self):
+        assert ac.find_bracketing_values([(5, 9.0)], 5.0) == (9.0, 9.0)
+
+    def test_unsorted_input_handled(self):
+        keys = [(10, 20.0), (1, 10.0)]  # reversed
+        assert ac.find_bracketing_values(keys, 5.0) == (10.0, 20.0)
+
+
 class TestTransformsDiffer:
     def test_identical(self):
         t = ((0, 0, 0), Q_ID, (1, 1, 1))

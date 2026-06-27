@@ -106,6 +106,41 @@ def breakdown_quat(a, b, t: float):
     return _quat_normalize(blended)
 
 
+def find_bracketing_values(keys, frame: float):
+    """Find the values of the keyframes straddling `frame`.
+
+    keys: iterable of (key_frame, value). Sorted internally so callers
+          don't have to. Returns (prev_value, next_value) — the value of
+          the last key strictly BEFORE `frame` and the first key strictly
+          AFTER it. A key exactly on `frame` is ignored (it's the
+          breakdown being adjusted). Returns None if there are no keys.
+
+    Used by the breakdown / tween slider: blending t=0→prev, t=1→next
+    moves the current frame's pose between its surrounding keys.
+    Out-of-range frames clamp to the nearest key (no blend).
+    """
+    ks = sorted(keys, key=lambda kv: kv[0])
+    if not ks:
+        return None
+    prev = None
+    nxt = None
+    for f, v in ks:
+        if f < frame:
+            prev = v
+        elif f > frame:
+            nxt = v
+            break
+        # f == frame: the key being adjusted — skip it
+    if prev is None and nxt is None:
+        # frame sits exactly on the only key(s) — nothing surrounds it
+        return (ks[0][1], ks[-1][1])
+    if prev is None:
+        prev = nxt
+    if nxt is None:
+        nxt = prev
+    return (prev, nxt)
+
+
 # ======================================================================
 # Loop validation
 # ======================================================================

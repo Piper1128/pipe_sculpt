@@ -177,6 +177,174 @@ class PIPESCULPT_OT_anim_mirror_pose(Operator):
         return {'FINISHED'}
 
 
+class PIPESCULPT_OT_anim_breakdown(Operator):
+    bl_idname = "pipe_sculpt.anim_breakdown"
+    bl_label = "Breakdown Slider"
+    bl_description = (
+        "Tween machine: drag to blend the selected bones between their previous "
+        "and next keyframes. Drag left toward the previous pose, right toward "
+        "the next. LMB/Enter confirms, RMB/Esc cancels"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    blend: FloatProperty(
+        name="Blend",
+        description="0 = previous key pose, 1 = next key pose, 0.5 = midpoint",
+        default=0.5,
+        min=0.0,
+        max=1.0,
+    )
+    # Pixels of horizontal mouse travel that spans the full 0..1 blend range
+    _SENSITIVITY = 300.0
+
+    @classmethod
+    def poll(cls, context):
+        arm = _armature_in_pose(context)
+        return arm is not None and _active_action(arm) is not None
+
+    def _gather(self, context):
+        """Collect per-bone bracketing key values around the current frame.
+
+        Stores self._channels: a list of per-bone dicts holding the prev/next
+        values (and the original, for cancel) of every keyed channel. Pure
+        lookup — no writes. Returns the channel count.
+        """
+        arm = _armature_in_pose(context)
+        self._arm = arm
+        frame = context.scene.frame_current
+
+        keymap = {}
+        for fc in _action_fcurves(arm):
+            keymap[(fc.data_path, fc.array_index)] = [
+                (kp.co[0], kp.co[1]) for kp in fc.keyframe_points
+            ]
+
+        self._channels = []
+        for pb in _target_bones(context, arm):
+            base = f'pose.bones["{pb.name}"]'
+            entry = {'pb': pb, 'loc': [], 'scale': [], 'quat': None, 'euler': []}
+
+            for i in range(3):
+                keys = keymap.get((f'{base}.location', i))
+                if keys:
+                    br = anim_core.find_bracketing_values(keys, frame)
+                    if br:
+                        entry['loc'].append((i, br[0], br[1], pb.location[i]))
+            for i in range(3):
+                keys = keymap.get((f'{base}.scale', i))
+                if keys:
+                    br = anim_core.find_bracketing_values(keys, frame)
+                    if br:
+                        entry['scale'].append((i, br[0], br[1], pb.scale[i]))
+
+            if pb.rotation_mode == 'QUATERNION':
+                prev_q, next_q, ok = [], [], True
+                for i in range(4):
+                    keys = keymap.get((f'{base}.rotation_quaternion', i))
+                    if not keys:
+                        ok = False
+                        break
+                    br = anim_core.find_bracketing_values(keys, frame)
+                    prev_q.append(br[0])
+                    next_q.append(br[1])
+                if ok:
+                    entry['quat'] = (tuple(prev_q), tuple(next_q), tuple(pb.rotation_quaternion))
+            else:
+                for i in range(3):
+                    keys = keymap.get((f'{base}.rotation_euler', i))
+                    if keys:
+                        br = anim_core.find_bracketing_values(keys, frame)
+                        if br:
+                            entry['euler'].append((i, br[0], br[1], pb.rotation_euler[i]))
+
+            if entry['loc'] or entry['scale'] or entry['quat'] or entry['euler']:
+                self._channels.append(entry)
+        return len(self._channels)
+
+    def _apply(self, t):
+        for e in self._channels:
+            pb = e['pb']
+            for i, p, n, _o in e['loc']:
+                pb.location[i] = anim_core.lerp(p, n, t)
+            for i, p, n, _o in e['scale']:
+                pb.scale[i] = anim_core.lerp(p, n, t)
+            if e['quat'] is not None:
+                p, n, _o = e['quat']
+                bq = anim_core.breakdown_quat(p, n, t)
+                pb.rotation_quaternion = bq
+            for i, p, n, _o in e['euler']:
+                pb.rotation_euler[i] = anim_core.lerp(p, n, t)
+
+    def _restore(self):
+        for e in self._channels:
+            pb = e['pb']
+            for i, _p, _n, o in e['loc']:
+                pb.location[i] = o
+            for i, _p, _n, o in e['scale']:
+                pb.scale[i] = o
+            if e['quat'] is not None:
+                pb.rotation_quaternion = e['quat'][2]
+            for i, _p, _n, o in e['euler']:
+                pb.rotation_euler[i] = o
+
+    def _key_blended(self):
+        for e in self._channels:
+            pb = e['pb']
+            if e['loc']:
+                pb.keyframe_insert("location")
+            if e['scale']:
+                pb.keyframe_insert("scale")
+            if e['quat'] is not None:
+                pb.keyframe_insert("rotation_quaternion")
+            if e['euler']:
+                pb.keyframe_insert("rotation_euler")
+
+    def execute(self, context):
+        # Non-modal path — exact blend value, scriptable + headless-testable
+        if self._gather(context) == 0:
+            self.report({'WARNING'}, "No keyed channels around this frame to blend")
+            return {'CANCELLED'}
+        self._apply(self.blend)
+        self._key_blended()
+        self.report({'INFO'}, f"Breakdown {self.blend * 100:.0f}% applied")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        if self._gather(context) == 0:
+            self.report({'WARNING'}, "No keyed channels around this frame to blend")
+            return {'CANCELLED'}
+        self._start_x = event.mouse_x
+        self.blend = 0.5
+        self._apply(0.5)
+        context.window_manager.modal_handler_add(self)
+        if context.area:
+            context.area.header_text_set("Breakdown: 50%   LMB/Enter confirm · RMB/Esc cancel")
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        if event.type == 'MOUSEMOVE':
+            dx = event.mouse_x - self._start_x
+            self.blend = max(0.0, min(1.0, 0.5 + dx / self._SENSITIVITY))
+            self._apply(self.blend)
+            if context.area:
+                context.area.header_text_set(
+                    f"Breakdown: {self.blend * 100:.0f}%   LMB/Enter confirm · RMB/Esc cancel"
+                )
+            return {'RUNNING_MODAL'}
+        if event.type in {'LEFTMOUSE', 'RET', 'NUMPAD_ENTER'} and event.value == 'PRESS':
+            self._key_blended()
+            if context.area:
+                context.area.header_text_set(None)
+            self.report({'INFO'}, f"Breakdown {self.blend * 100:.0f}% applied")
+            return {'FINISHED'}
+        if event.type in {'RIGHTMOUSE', 'ESC'} and event.value == 'PRESS':
+            self._restore()
+            if context.area:
+                context.area.header_text_set(None)
+            return {'CANCELLED'}
+        return {'RUNNING_MODAL'}
+
+
 class PIPESCULPT_OT_anim_reset_pose(Operator):
     bl_idname = "pipe_sculpt.anim_reset_pose"
     bl_label = "Reset to Rest"
@@ -560,6 +728,7 @@ class PIPESCULPT_PT_animate(Panel):
         row = col.row(align=True)
         row.operator("pipe_sculpt.anim_mirror_pose", text="Mirror", icon='MOD_MIRROR')
         row.operator("pipe_sculpt.anim_reset_pose", text="Rest", icon='LOOP_BACK')
+        col.operator("pipe_sculpt.anim_breakdown", text="Breakdown Slider", icon='SMOOTHCURVE')
 
         layout.separator()
         col = layout.column(align=True)
@@ -582,6 +751,7 @@ _pose_classes = (
     PIPESCULPT_OT_anim_copy_pose,
     PIPESCULPT_OT_anim_paste_pose,
     PIPESCULPT_OT_anim_mirror_pose,
+    PIPESCULPT_OT_anim_breakdown,
     PIPESCULPT_OT_anim_reset_pose,
     PIPESCULPT_OT_anim_key_rig,
     PIPESCULPT_OT_anim_key_selected,
