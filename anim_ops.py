@@ -196,11 +196,351 @@ class PIPESCULPT_OT_anim_reset_pose(Operator):
         return {'FINISHED'}
 
 
+# ======================================================================
+# F-curve access — version-robust (Blender 5.1 removed action.fcurves)
+# ======================================================================
+
+def _action_fcurves(obj):
+    """Return the active action's F-curves across Blender versions.
+
+    Spiked against Blender 5.1: `action.fcurves` is GONE — slotted actions
+    store curves in channelbags under layers/strips. We try the legacy
+    direct path first (Blender < 4.4) then fall back to the channelbag path
+    (4.4+/5.x). Returns a flat list of FCurve.
+    """
+    ad = obj.animation_data
+    if ad is None or ad.action is None:
+        return []
+    act = ad.action
+
+    # Legacy direct path (pre-slotted actions)
+    if hasattr(act, "fcurves"):
+        return list(act.fcurves)
+
+    # Slotted action: fcurves live in channelbag(slot)
+    slot = getattr(ad, "action_slot", None)
+    fcurves = []
+    for layer in act.layers:
+        for strip in layer.strips:
+            if not hasattr(strip, "channelbag"):
+                continue
+            cb = strip.channelbag(slot) if slot is not None else None
+            if cb is not None:
+                fcurves.extend(cb.fcurves)
+    return fcurves
+
+
+def _active_action(obj):
+    ad = obj.animation_data
+    return ad.action if ad and ad.action else None
+
+
+# ======================================================================
+# 2.2 Keying helpers
+# ======================================================================
+
+class PIPESCULPT_OT_anim_key_rig(Operator):
+    bl_idname = "pipe_sculpt.anim_key_rig"
+    bl_label = "Key Whole Rig"
+    bl_description = "Insert a keyframe on loc/rot/scale of every pose bone at the current frame"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return _armature_in_pose(context) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        n = _key_bones(arm.pose.bones)
+        self.report({'INFO'}, f"Keyed {n} bone(s) at frame {context.scene.frame_current}")
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_anim_key_selected(Operator):
+    bl_idname = "pipe_sculpt.anim_key_selected"
+    bl_label = "Key Selected"
+    bl_description = "Insert a keyframe on loc/rot/scale of the selected pose bones only"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return _armature_in_pose(context) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        n = _key_bones(_target_bones(context, arm))
+        self.report({'INFO'}, f"Keyed {n} selected bone(s)")
+        return {'FINISHED'}
+
+
+def _key_bones(bones):
+    """Insert loc/rot/scale keys on each bone, using its actual rotation mode."""
+    n = 0
+    for pb in bones:
+        pb.keyframe_insert("location")
+        if pb.rotation_mode == 'QUATERNION':
+            pb.keyframe_insert("rotation_quaternion")
+        elif pb.rotation_mode == 'AXIS_ANGLE':
+            pb.keyframe_insert("rotation_axis_angle")
+        else:
+            pb.keyframe_insert("rotation_euler")
+        pb.keyframe_insert("scale")
+        n += 1
+    return n
+
+
+class PIPESCULPT_OT_anim_toggle_interp(Operator):
+    bl_idname = "pipe_sculpt.anim_toggle_interp"
+    bl_label = "Toggle Stepped / Spline"
+    bl_description = (
+        "Switch every keyframe on the active action between CONSTANT (blocking) "
+        "and BEZIER (spline). Detects the current dominant mode and flips it"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        arm = _armature_in_pose(context)
+        return arm is not None and _active_action(arm) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        fcurves = _action_fcurves(arm)
+        # Detect dominant interpolation across all keys
+        constant = 0
+        total = 0
+        for fc in fcurves:
+            for kp in fc.keyframe_points:
+                total += 1
+                if kp.interpolation == 'CONSTANT':
+                    constant += 1
+        if total == 0:
+            self.report({'WARNING'}, "Active action has no keyframes")
+            return {'CANCELLED'}
+        # If mostly constant, go spline; otherwise go constant
+        new_interp = 'BEZIER' if constant > total / 2 else 'CONSTANT'
+        for fc in fcurves:
+            for kp in fc.keyframe_points:
+                kp.interpolation = new_interp
+            fc.update()
+        self.report({'INFO'}, f"Set {total} keys to {new_interp} ({'spline' if new_interp == 'BEZIER' else 'blocking'})")
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_anim_fit_range(Operator):
+    bl_idname = "pipe_sculpt.anim_fit_range"
+    bl_label = "Fit Preview Range"
+    bl_description = "Set the scene preview range to the active action's frame range so loop preview is exact"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        arm = _armature_in_pose(context)
+        return arm is not None and _active_action(arm) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        act = _active_action(arm)
+        start, end = anim_core.fit_preview_range(act.frame_range[0], act.frame_range[1])
+        scene = context.scene
+        scene.use_preview_range = True
+        scene.frame_preview_start = start
+        scene.frame_preview_end = end
+        self.report({'INFO'}, f"Preview range {start}–{end}")
+        return {'FINISHED'}
+
+
+# ======================================================================
+# 2.3 Loop authoring
+# ======================================================================
+
+def _sample_pose(arm, frame, context):
+    """Set the scene to `frame` and read every bone's (loc, quat, scale)."""
+    context.scene.frame_set(int(frame))
+    return {pb.name: _read_transform(pb) for pb in arm.pose.bones}
+
+
+class PIPESCULPT_OT_anim_validate_loop(Operator):
+    bl_idname = "pipe_sculpt.anim_validate_loop"
+    bl_label = "Validate Loop"
+    bl_description = (
+        "Compare the pose at the first vs last frame of the active action and "
+        "report which bones 'pop' — i.e. differ enough to make the loop visibly "
+        "jump. Makes loop errors visible here instead of in Unity"
+    )
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        arm = _armature_in_pose(context)
+        return arm is not None and _active_action(arm) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        act = _active_action(arm)
+        f_start, f_end = int(act.frame_range[0]), int(act.frame_range[1])
+        if f_start == f_end:
+            self.report({'WARNING'}, "Action is a single frame — nothing to loop")
+            return {'CANCELLED'}
+
+        prior_frame = context.scene.frame_current
+        pose_first = _sample_pose(arm, f_start, context)
+        pose_last = _sample_pose(arm, f_end, context)
+        context.scene.frame_set(prior_frame)
+
+        diffs = anim_core.diff_pose(pose_first, pose_last)
+
+        # Print full report to console
+        print(f"\n=== PipeSculpt Loop Validation: '{act.name}' f{f_start}↔f{f_end} ===")
+        if not diffs:
+            print("  Loop is clean — first and last frame match.")
+        else:
+            for d in diffs[:20]:
+                print(f"  {d.bone:<16} loc Δ{d.loc_delta:.4f}  rot Δ{d.rot_delta:.4f}  scale Δ{d.scale_delta:.4f}")
+        print("=" * 50)
+
+        if not diffs:
+            self.report({'INFO'}, f"Loop clean — frame {f_start} matches frame {f_end} ✓")
+        else:
+            worst = diffs[0]
+            self.report(
+                {'WARNING'},
+                f"{len(diffs)} bone(s) pop on loop — worst: '{worst.bone}' "
+                f"(Δ{worst.max_delta:.3f}). See System Console for the full list",
+            )
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_anim_make_cyclic(Operator):
+    bl_idname = "pipe_sculpt.anim_make_cyclic"
+    bl_label = "Make Cyclic"
+    bl_description = (
+        "Copy the last frame's pose onto the first frame so the cycle closes, "
+        "then add a Cycles modifier to every F-curve so it repeats seamlessly"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    copy_direction: EnumProperty(
+        name="Match",
+        items=(
+            ('LAST_TO_FIRST', "Last → First", "Copy the last frame's pose onto the first"),
+            ('FIRST_TO_LAST', "First → Last", "Copy the first frame's pose onto the last"),
+        ),
+        default='LAST_TO_FIRST',
+    )
+
+    @classmethod
+    def poll(cls, context):
+        arm = _armature_in_pose(context)
+        return arm is not None and _active_action(arm) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        act = _active_action(arm)
+        f_start, f_end = int(act.frame_range[0]), int(act.frame_range[1])
+        if f_start == f_end:
+            self.report({'WARNING'}, "Action is a single frame")
+            return {'CANCELLED'}
+
+        prior = context.scene.frame_current
+        if self.copy_direction == 'LAST_TO_FIRST':
+            src_frame, dst_frame = f_end, f_start
+        else:
+            src_frame, dst_frame = f_start, f_end
+
+        src_pose = _sample_pose(arm, src_frame, context)
+        context.scene.frame_set(dst_frame)
+        for pb in arm.pose.bones:
+            if pb.name in src_pose:
+                _write_transform(pb, src_pose[pb.name])
+        _key_bones(arm.pose.bones)
+        context.scene.frame_set(prior)
+
+        # Add Cycles modifier to every fcurve (idempotent — skip if present)
+        cyc = 0
+        for fc in _action_fcurves(arm):
+            if not any(mod.type == 'CYCLES' for mod in fc.modifiers):
+                fc.modifiers.new('CYCLES')
+                cyc += 1
+            fc.update()
+
+        self.report(
+            {'INFO'},
+            f"Cycle closed ({self.copy_direction.replace('_', ' ').lower()}); "
+            f"added Cycles to {cyc} curve(s)",
+        )
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_anim_bake_in_place(Operator):
+    bl_idname = "pipe_sculpt.anim_bake_in_place"
+    bl_label = "Bake In-Place"
+    bl_description = (
+        "Remove the root bone's horizontal (XY) translation so an in-place loop "
+        "doesn't drift. Keep Z for crouch/jump height. Use for Unity 'Bake Into "
+        "Pose' on root position"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    keep_z: BoolProperty(
+        name="Keep Vertical (Z)",
+        description="Preserve up/down motion (crouch, jump); only strip horizontal drift",
+        default=True,
+    )
+    root_bone: bpy.props.StringProperty(
+        name="Root Bone",
+        description="Name of the bone carrying root motion",
+        default="root",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        arm = _armature_in_pose(context)
+        return arm is not None and _active_action(arm) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        data_path = f'pose.bones["{self.root_bone}"].location'
+        fcurves = [fc for fc in _action_fcurves(arm) if fc.data_path == data_path]
+        if not fcurves:
+            self.report(
+                {'WARNING'},
+                f"No location curves on '{self.root_bone}' — nothing to strip "
+                "(clip may already be in-place)",
+            )
+            return {'CANCELLED'}
+
+        # Report the travel we're about to remove, then zero X (0) and Y (1)
+        stripped = 0
+        for fc in fcurves:
+            if fc.array_index == 2 and self.keep_z:
+                continue  # keep vertical
+            for kp in fc.keyframe_points:
+                kp.co[1] = 0.0
+                kp.handle_left[1] = 0.0
+                kp.handle_right[1] = 0.0
+            fc.update()
+            stripped += 1
+        self.report(
+            {'INFO'},
+            f"Stripped root translation on {stripped} axis-curve(s) "
+            f"({'kept Z' if self.keep_z else 'all axes'})",
+        )
+        return {'FINISHED'}
+
+
 _pose_classes = (
     PIPESCULPT_OT_anim_copy_pose,
     PIPESCULPT_OT_anim_paste_pose,
     PIPESCULPT_OT_anim_mirror_pose,
     PIPESCULPT_OT_anim_reset_pose,
+    PIPESCULPT_OT_anim_key_rig,
+    PIPESCULPT_OT_anim_key_selected,
+    PIPESCULPT_OT_anim_toggle_interp,
+    PIPESCULPT_OT_anim_fit_range,
+    PIPESCULPT_OT_anim_validate_loop,
+    PIPESCULPT_OT_anim_make_cyclic,
+    PIPESCULPT_OT_anim_bake_in_place,
 )
 
 
