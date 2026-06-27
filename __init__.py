@@ -25,13 +25,14 @@ def _modules():
     from . import handlers
     from . import palette_ops
     from . import viz_ops
+    from . import anim_ops
     from . import workflow_panel
     from . import keymap
     return [
         preferences, pie_menus, rigging, starters, workflow_ops,
         bake_ops, export_ops, manual_retopo_ops, uv_ops, paint_ops,
         ref_ops, hair_ops, validator_ops, project_ops, handlers,
-        palette_ops, viz_ops, workflow_panel, keymap,
+        palette_ops, viz_ops, anim_ops, workflow_panel, keymap,
     ]
 
 

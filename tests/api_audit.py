@@ -158,6 +158,24 @@ def _fbx_export():
 
 check("export_unity_fbx", _fbx_export)
 
+
+def _anim_pose_tools():
+    # Exercises context.selected_pose_bones (Bone.select was removed in 5.x)
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    mesh = bpy.context.active_object
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.pose.select_all(action='DESELECT')
+    bpy.ops.pipe_sculpt.anim_copy_pose()
+    bpy.ops.pipe_sculpt.anim_mirror_pose()
+    bpy.ops.pipe_sculpt.anim_reset_pose()
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+check("anim pose tools (copy/mirror/reset)", _anim_pose_tools)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")
