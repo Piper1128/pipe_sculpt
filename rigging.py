@@ -123,6 +123,10 @@ DEFORM_BONE_NAMES: tuple[str, ...] = (
     "wing_upper.R", "wing_lower.R", "wingtip.R",
     "bird_leg_upper.L", "bird_leg_lower.L",
     "bird_leg_upper.R", "bird_leg_lower.R",
+    # Appended LAST so adding it never shifts an existing bone index — old
+    # tags keep pointing at the right bone. 'chest' is the spine→chest split
+    # for HUMANOID + MECH (Unity Chest).
+    "chest",
 )
 BONE_NAME_TO_INDEX = {n: i for i, n in enumerate(DEFORM_BONE_NAMES)}
 
@@ -135,20 +139,23 @@ HUMANOID_BONES: tuple = (
     # Master root
     ("root",        None,           (0.00,  0.00,  0.00),  (0.00,  0.00,  0.20),  'C'),
 
-    # Body chain
+    # Body chain — split into spine + chest (Unity Hips→Spine→Chest→Neck→Head).
+    # Two spine segments distribute torso bending and let mocap that animates
+    # Spine/Spine1/Spine2 retarget without collapsing to one pivot.
     ("pelvis",      "root",         (0.00,  0.00, -0.418), (0.00,  0.00, -0.082), 'D'),
-    ("spine",       "pelvis",       (0.00,  0.00, -0.082), (0.00,  0.00,  0.585), 'D'),
-    ("neck",        "spine",        (0.00,  0.00,  0.585), (0.00,  0.00,  0.625), 'D'),
+    ("spine",       "pelvis",       (0.00,  0.00, -0.082), (0.00,  0.00,  0.250), 'D'),
+    ("chest",       "spine",        (0.00,  0.00,  0.250), (0.00,  0.00,  0.585), 'D'),
+    ("neck",        "chest",        (0.00,  0.00,  0.585), (0.00,  0.00,  0.625), 'D'),
     ("head",        "neck",         (0.00,  0.00,  0.625), (0.00,  0.00,  0.956), 'D'),
 
-    # Left arm
-    ("clavicle.L",  "spine",        (0.00,  0.00,  0.550), (0.30,  0.00,  0.400), 'D'),
+    # Left arm — clavicle parents to chest (upper-torso bone), not spine
+    ("clavicle.L",  "chest",        (0.00,  0.00,  0.550), (0.30,  0.00,  0.400), 'D'),
     ("upper_arm.L", "clavicle.L",   (0.30,  0.00,  0.400), (0.70,  0.00,  0.400), 'D'),
     ("forearm.L",   "upper_arm.L",  (0.70,  0.00,  0.400), (1.05,  0.00,  0.400), 'D'),
     ("hand.L",      "forearm.L",    (1.05,  0.00,  0.400), (1.20,  0.00,  0.400), 'D'),
 
     # Right arm (mirror)
-    ("clavicle.R",  "spine",        (0.00,  0.00,  0.550), (-0.30, 0.00,  0.400), 'D'),
+    ("clavicle.R",  "chest",        (0.00,  0.00,  0.550), (-0.30, 0.00,  0.400), 'D'),
     ("upper_arm.R", "clavicle.R",   (-0.30, 0.00,  0.400), (-0.70, 0.00,  0.400), 'D'),
     ("forearm.R",   "upper_arm.R",  (-0.70, 0.00,  0.400), (-1.05, 0.00,  0.400), 'D'),
     ("hand.R",      "forearm.R",    (-1.05, 0.00,  0.400), (-1.20, 0.00,  0.400), 'D'),
@@ -342,14 +349,15 @@ MECH_MESH_ORIGIN_OFFSET = (0.0, 0.0, 0.20)
 MECH_BONES: tuple = (
     ("root",         None,           (0.00,  0.00,  0.00),  (0.00,  0.00,  0.20),  'C'),
     ("pelvis",       "root",         (0.00,  0.00, -0.418), (0.00,  0.00, -0.082), 'D'),
-    ("spine",        "pelvis",       (0.00,  0.00, -0.082), (0.00,  0.00,  0.585), 'D'),
-    ("neck",         "spine",        (0.00,  0.00,  0.585), (0.00,  0.00,  0.625), 'D'),
+    ("spine",        "pelvis",       (0.00,  0.00, -0.082), (0.00,  0.00,  0.250), 'D'),
+    ("chest",        "spine",        (0.00,  0.00,  0.250), (0.00,  0.00,  0.585), 'D'),
+    ("neck",         "chest",        (0.00,  0.00,  0.585), (0.00,  0.00,  0.625), 'D'),
     ("head",         "neck",         (0.00,  0.00,  0.625), (0.00,  0.00,  0.956), 'D'),
-    # Arms — no clavicle (rigid mech shoulder), 3-bone chain
-    ("upper_arm.L",  "spine",        (0.30,  0.00,  0.400), (0.70,  0.00,  0.400), 'D'),
+    # Arms — no clavicle (rigid mech shoulder), parented to chest
+    ("upper_arm.L",  "chest",        (0.30,  0.00,  0.400), (0.70,  0.00,  0.400), 'D'),
     ("forearm.L",    "upper_arm.L",  (0.70,  0.00,  0.400), (1.05,  0.00,  0.400), 'D'),
     ("hand.L",       "forearm.L",    (1.05,  0.00,  0.400), (1.20,  0.00,  0.400), 'D'),
-    ("upper_arm.R",  "spine",        (-0.30, 0.00,  0.400), (-0.70, 0.00,  0.400), 'D'),
+    ("upper_arm.R",  "chest",        (-0.30, 0.00,  0.400), (-0.70, 0.00,  0.400), 'D'),
     ("forearm.R",    "upper_arm.R",  (-0.70, 0.00,  0.400), (-1.05, 0.00,  0.400), 'D'),
     ("hand.R",       "forearm.R",    (-1.05, 0.00,  0.400), (-1.20, 0.00,  0.400), 'D'),
     # Legs — same as humanoid

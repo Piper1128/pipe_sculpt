@@ -195,12 +195,18 @@ class PIPESCULPT_OT_starter_humanoid(Operator):
 
         neck = _add_sphere(0.075, (cx, cy, cz + 0.55))
         rigging.tag_primitive(neck, "neck")
-        torso = _add_sphere(0.275, (cx, cy, cz + 0.20), scale=(1.10, 0.70, 1.40))
+        # Torso is split into spine (lower) + chest (upper) so the spine→chest
+        # bone split (Unity Hips→Spine→Chest) gets real initial weights instead
+        # of relying on smoothing bleed. `torso` stays at cz+0.20 because it's
+        # the join base and defines the mesh origin (HUMANOID_MESH_ORIGIN_OFFSET).
+        torso = _add_sphere(0.24, (cx, cy, cz + 0.20), scale=(1.10, 0.70, 1.05))
         rigging.tag_primitive(torso, "spine")
+        chest = _add_sphere(0.22, (cx, cy, cz + 0.42), scale=(1.15, 0.72, 1.00))
+        rigging.tag_primitive(chest, "chest")
         pelvis = _add_sphere(0.21, (cx, cy, cz - 0.25), scale=(1.05, 0.85, 0.80))
         rigging.tag_primitive(pelvis, "pelvis")
 
-        parts = [cranium, jaw_mass, neck, torso, pelvis]
+        parts = [cranium, jaw_mass, neck, torso, chest, pelvis]
 
         # Sub-voxel ear anchors — invisible bumps that exist only to give the
         # ear.L/.R bones vertex-group weights. User sculpts the actual ears.
@@ -489,11 +495,14 @@ class PIPESCULPT_OT_starter_mech(Operator):
         rigging.tag_primitive(head_block, "head")
         neck = _add_sphere(0.07, (cx, cy, cz + 0.55))
         rigging.tag_primitive(neck, "neck")
-        torso = _add_sphere(0.275, (cx, cy, cz + 0.20), scale=(1.10, 0.70, 1.40))
+        # Spine + chest split (same as Humanoid); torso is the join base at cz+0.20
+        torso = _add_sphere(0.24, (cx, cy, cz + 0.20), scale=(1.10, 0.70, 1.05))
         rigging.tag_primitive(torso, "spine")
+        chest = _add_sphere(0.22, (cx, cy, cz + 0.42), scale=(1.15, 0.72, 1.00))
+        rigging.tag_primitive(chest, "chest")
         pelvis = _add_sphere(0.21, (cx, cy, cz - 0.25), scale=(1.05, 0.85, 0.80))
         rigging.tag_primitive(pelvis, "pelvis")
-        parts = [head_block, neck, torso, pelvis]
+        parts = [head_block, neck, torso, chest, pelvis]
 
         # Arms — no clavicle, rigid shoulder
         for side, suffix in ((1, "L"), (-1, "R")):

@@ -45,6 +45,7 @@ UNITY_HUMANOID_REQUIRED = (
 PIPESCULPT_TO_UNITY = {
     "pelvis":      "Hips",
     "spine":       "Spine",
+    "chest":       "Chest",
     "neck":        "Neck",
     "head":        "Head",
     "clavicle.L":  "LeftShoulder",
