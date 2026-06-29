@@ -205,6 +205,23 @@ def _anim_keying_loop_breakdown():
 
 check("anim keying/loop/breakdown (channelbag fcurves)", _anim_keying_loop_breakdown)
 
+
+def _bone_picker():
+    # Exercises PoseBone.select writes + arm.data.bones.active
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.pipe_sculpt.pick_bone(bone="upper_arm.L", extend=False)
+    bpy.ops.pipe_sculpt.pick_bone(bone="hand.R", extend=True)
+    bpy.ops.pipe_sculpt.pick_side(side='L')
+    bpy.ops.pipe_sculpt.pick_side(side='NONE')
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+check("bone picker (pick / extend / side)", _bone_picker)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")
