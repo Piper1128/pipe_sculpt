@@ -120,6 +120,12 @@ Built on a spike of Blender 5.1's slotted-action API: `action.fcurves` was
 removed in 5.x, so F-curves are accessed via channelbags
 (`action.layers[].strips[].channelbag(slot).fcurves`) with a legacy fallback.
 
+**Bone Picker** (pose-mode panel) — a clickable, body-shaped grid built
+automatically from the armature's bone names. No per-rig setup: bones are
+classified by name into a left/center/right silhouette with separate Controls
+and Fingers sub-grids. Click selects a pose bone, Shift-click extends; quick
+All/L/R/None buttons. Works for humanoid / quadruped / bird / mech rigs.
+
 ### Manual retopology helper
 For cases where Quadriflow gives bad topology (faces, hard-surface, mech):
 
