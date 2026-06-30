@@ -222,6 +222,27 @@ def _bone_picker():
 
 check("bone picker (pick / extend / side)", _bone_picker)
 
+
+def _clip_manager():
+    # New clip → key (slot binding) → duplicate → activate → push NLA → delete
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.pipe_sculpt.clip_new(name="AuditWalk")
+    bpy.ops.pipe_sculpt.anim_key_rig()
+    bpy.ops.pipe_sculpt.clip_duplicate()
+    bpy.ops.pipe_sculpt.clip_rename(new_name="AuditRun")
+    bpy.ops.pipe_sculpt.clip_activate(clip="AuditWalk")
+    bpy.ops.pipe_sculpt.clip_push_nla()
+    bpy.ops.pipe_sculpt.clip_activate(clip="AuditRun")
+    bpy.ops.pipe_sculpt.clip_delete()
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+check("clip manager (new/key/dup/activate/push/delete)", _clip_manager)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")
