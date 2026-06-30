@@ -126,6 +126,13 @@ classified by name into a left/center/right silhouette with separate Controls
 and Fingers sub-grids. Click selects a pose bone, Shift-click extends; quick
 All/L/R/None buttons. Works for humanoid / quadruped / bird / mech rigs.
 
+**Clip Manager** (Clips panel) — manage a character's animation clips without
+the dope-sheet action editor. New / Activate / Duplicate / Rename / Push-to-NLA
+/ Delete, with the active clip highlighted and the NLA stash count shown.
+Built on the Action + NLA model (a [spike](SPIKE_SLOTTED_ACTIONS.md) confirmed
+Blender 5.1's layered actions cap at one layer, so clips stay Actions).
+Manager-created clips get a fake user so they survive a save while inactive.
+
 ### Manual retopology helper
 For cases where Quadriflow gives bad topology (faces, hard-surface, mech):
 
