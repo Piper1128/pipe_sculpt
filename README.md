@@ -133,6 +133,14 @@ Built on the Action + NLA model (a [spike](SPIKE_SLOTTED_ACTIONS.md) confirmed
 Blender 5.1's layered actions cap at one layer, so clips stay Actions).
 Manager-created clips get a fake user so they survive a save while inactive.
 
+**Additive Layers** (panel) — stack recoil / breathing / flinch on top of a
+base cycle without NLA tweak-mode wrestling. Push a base clip to NLA (REPLACE),
+then Add Additive Layer drops a clip onto a COMBINE track above it. Per-layer
+live blend-mode, mute, and a 0–100% influence dial. COMBINE is the
+quaternion-correct additive blend (the spike confirmed ADD breaks rotations);
+constant influence is set via an influence F-curve. Verified end-to-end on the
+evaluated pose (base 40° + 20° additive → 60° full, 50° at half influence).
+
 ### Manual retopology helper
 For cases where Quadriflow gives bad topology (faces, hard-surface, mech):
 
