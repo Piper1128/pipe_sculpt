@@ -29,6 +29,7 @@ def _modules():
     from . import picker_ops
     from . import clip_ops
     from . import layer_ops
+    from . import onion_ops
     from . import workflow_panel
     from . import keymap
     return [
@@ -36,7 +37,7 @@ def _modules():
         bake_ops, export_ops, manual_retopo_ops, uv_ops, paint_ops,
         ref_ops, hair_ops, validator_ops, project_ops, handlers,
         palette_ops, viz_ops, anim_ops, picker_ops, clip_ops, layer_ops,
-        workflow_panel, keymap,
+        onion_ops, workflow_panel, keymap,
     ]
 
 

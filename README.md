@@ -141,6 +141,15 @@ quaternion-correct additive blend (the spike confirmed ADD breaks rotations);
 constant influence is set via an influence F-curve. Verified end-to-end on the
 evaluated pose (base 40° + 20° additive → 60° full, 50° at half influence).
 
+**Onion Skin** (panel) — ghost copies of the deformed mesh at the surrounding
+frames so you can see the motion arc. Past frames tint blue, future warm,
+fading with distance; ghosts live in a dedicated collection hidden from render
+and selection. Static snapshots — re-run Show to update. Best viewed in
+Material Preview shading. The FK deform-capture is headless-verified; the
+IK-driven case is GUI-only (see [ONION_SKIN_TEST.md](ONION_SKIN_TEST.md) — in
+headless background mode IK constraints block the deform eval, a Blender
+limitation, not a feature bug).
+
 ### Manual retopology helper
 For cases where Quadriflow gives bad topology (faces, hard-surface, mech):
 

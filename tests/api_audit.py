@@ -265,6 +265,27 @@ def _additive_layers():
 
 check("additive layers (add/influence/remove, NLA COMBINE)", _additive_layers)
 
+
+def _onion_skin():
+    # Show + clear onion ghosts. Deform won't capture headless (IK blocks it),
+    # but this confirms the operators run + cleanup leaks nothing.
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.pipe_sculpt.anim_key_rig()
+    bpy.context.scene.frame_set(5)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.pipe_sculpt.onion_show(frames_before=2, frames_after=2, step=1)
+    n = sum(1 for o in bpy.data.objects if o.get("pipe_sculpt_onion_ghost") is not None)
+    bpy.ops.pipe_sculpt.onion_clear()
+    leftover = sum(1 for o in bpy.data.objects if o.get("pipe_sculpt_onion_ghost") is not None)
+    assert leftover == 0, f"onion clear leaked {leftover} ghost(s)"
+
+
+check("onion skin (show/clear, leak-free)", _onion_skin)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")
