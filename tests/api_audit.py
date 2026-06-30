@@ -243,6 +243,28 @@ def _clip_manager():
 
 check("clip manager (new/key/dup/activate/push/delete)", _clip_manager)
 
+
+def _additive_layers():
+    # base clip → push (REPLACE) → additive clip → layer_add (COMBINE) →
+    # influence fcurve recipe → remove. Exercises NlaStrip blend + fcurves.
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.pipe_sculpt.clip_new(name="LayerBase")
+    bpy.ops.pipe_sculpt.anim_key_rig()
+    bpy.ops.pipe_sculpt.clip_push_nla()
+    bpy.ops.pipe_sculpt.clip_new(name="LayerAdd")
+    bpy.ops.pipe_sculpt.anim_key_rig()
+    bpy.ops.pipe_sculpt.layer_add()
+    bpy.ops.pipe_sculpt.layer_influence(track="LayerAdd", influence=0.5)
+    bpy.ops.pipe_sculpt.layer_remove(track="LayerAdd")
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+check("additive layers (add/influence/remove, NLA COMBINE)", _additive_layers)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")
