@@ -108,7 +108,10 @@ def _clear_ghosts(context):
 
 
 def _count_ghosts():
-    return sum(1 for o in bpy.data.objects if _is_ghost(o))
+    # O(1)-ish: read the ghost collection's object count instead of scanning
+    # every object in the file. The panel calls this on every redraw.
+    coll = bpy.data.collections.get(GHOST_COLLECTION)
+    return len(coll.objects) if coll is not None else 0
 
 
 # ----------------------------------------------------------------------
@@ -290,8 +293,7 @@ class PIPESCULPT_OT_onion_clear(Operator):
 
     @classmethod
     def poll(cls, context):
-        return bpy.data.collections.get(GHOST_COLLECTION) is not None or \
-            any(_is_ghost(o) for o in bpy.data.objects)
+        return _count_ghosts() > 0
 
     def execute(self, context):
         n = _clear_ghosts(context)

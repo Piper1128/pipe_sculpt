@@ -28,6 +28,22 @@ def _armature_in_pose(context):
     return obj
 
 
+# Per-armature layout cache so the panel doesn't reclassify every bone on
+# every redraw (the panel redraws constantly while posing). Keyed by armature
+# name; invalidated when the bone count changes (len() is O(1)).
+_LAYOUT_CACHE = {}
+
+
+def _cached_layout(arm):
+    n = len(arm.pose.bones)
+    cached = _LAYOUT_CACHE.get(arm.name)
+    if cached is not None and cached[0] == n:
+        return cached[1]
+    slots = picker_core.build_picker_layout([pb.name for pb in arm.pose.bones])
+    _LAYOUT_CACHE[arm.name] = (n, slots)
+    return slots
+
+
 class PIPESCULPT_OT_pick_bone(Operator):
     bl_idname = "pipe_sculpt.pick_bone"
     bl_label = "Pick Bone"
@@ -109,8 +125,7 @@ class PIPESCULPT_PT_bone_picker(Panel):
     def draw(self, context):
         layout = self.layout
         arm = _armature_in_pose(context)
-        names = [pb.name for pb in arm.pose.bones]
-        slots = picker_core.build_picker_layout(names)
+        slots = _cached_layout(arm)
 
         # Quick select row
         row = layout.row(align=True)

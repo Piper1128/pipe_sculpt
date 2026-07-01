@@ -97,25 +97,27 @@ class PIPESCULPT_PT_viz_stats_live(Panel):
         obj = context.active_object
         mesh = obj.data
 
+        # All len() reads are O(1). NEVER iterate polygons here — this panel
+        # redraws on every viewport update (constantly while sculpting/posing),
+        # so an O(n) triangle sum froze the UI on heavy/multires meshes.
+        n_faces = len(mesh.polygons)
         col = layout.column(align=True)
         col.label(text=f"Vertices: {len(mesh.vertices):,}", icon='VERTEXSEL')
         col.label(text=f"Edges: {len(mesh.edges):,}", icon='EDGESEL')
-        col.label(text=f"Faces: {len(mesh.polygons):,}", icon='FACESEL')
+        col.label(text=f"Faces: {n_faces:,}", icon='FACESEL')
+        # Rough triangle estimate (quads → ~2 tris) without touching polygons.
+        col.label(text=f"~Triangles: {n_faces * 2:,}", icon='MESH_DATA')
 
-        # Triangle estimate (Blender doesn't store triangulated count directly)
-        tri_count = sum(len(p.vertices) - 2 for p in mesh.polygons)
-        col.label(text=f"Triangles: {tri_count:,}", icon='MESH_DATA')
-
-        # Polycount budget hints
+        # Polycount budget hints (based on the O(1) face count)
         layout.separator()
         col = layout.column(align=True)
-        if tri_count == 0:
+        if n_faces == 0:
             col.label(text="(empty mesh)", icon='ERROR')
-        elif tri_count > 100_000:
-            col.label(text="> 100k — sculpt only", icon='ERROR')
-        elif tri_count > 50_000:
-            col.label(text="50-100k — hero range", icon='INFO')
-        elif tri_count > 5_000:
+        elif n_faces > 50_000:
+            col.label(text="> 100k tris — sculpt only", icon='ERROR')
+        elif n_faces > 25_000:
+            col.label(text="50-100k tris — hero range", icon='INFO')
+        elif n_faces > 2_500:
             col.label(text="Unity-ready", icon='CHECKMARK')
         else:
             col.label(text="Low-poly", icon='CHECKMARK')
