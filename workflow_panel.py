@@ -99,6 +99,10 @@ class PIPESCULPT_PT_workflow(Panel):
         col.scale_y = 1.4
         col.label(text="Genesis-Tracked Rigging", icon='ARMATURE_DATA')
         col.operator("pipe_sculpt.generate_rig", icon='OUTLINER_OB_ARMATURE')
+        if context.active_object is not None and context.active_object.type == 'ARMATURE':
+            row = col.row(align=True)
+            row.operator("pipe_sculpt.style_rig", text="Style Controls", icon='GROUP_BONE')
+            row.operator("pipe_sculpt.unstyle_rig", text="", icon='X')
 
         layout.separator()
         col = layout.column(align=True)

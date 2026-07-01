@@ -783,6 +783,11 @@ class PIPESCULPT_OT_generate_rig(Operator):
         mesh_obj.select_set(True)
         context.view_layer.objects.active = arm_obj
 
+        # Style the rig so its IK controls are visible, coloured and grabbable
+        # out of the box (never fatal — a styling failure must not break rigging).
+        from . import setup_ops
+        setup_ops.apply_default_style(context, arm_obj)
+
         # Restore the user's prior mode if we disrupted it. context.mode strings
         # ('SCULPT', 'EDIT_MESH', 'POSE', ...) don't map 1:1 to mode_set args
         # ('SCULPT', 'EDIT', 'POSE', ...). Translate the common cases; if it

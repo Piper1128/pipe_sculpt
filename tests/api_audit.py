@@ -337,6 +337,29 @@ def _multires_guard():
 
 check("multires rig guard (block + override)", _multires_guard)
 
+
+def _rig_styling():
+    # Generate Rig auto-styles; controls get widgets + colours, deform none,
+    # WGT collection hidden, re-style idempotent, unstyle clears.
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object  # generate_rig leaves the NEW armature active
+    assert arm.type == 'ARMATURE', "generate_rig didn't leave armature active"
+    hand = arm.pose.bones.get("hand_ik.L")
+    assert hand is not None and hand.custom_shape is not None, "control got no widget"
+    assert arm.pose.bones["upper_arm.L"].custom_shape is None, "deform bone got a widget"
+    assert arm.show_in_front, "show_in_front not set"
+    wgt = bpy.data.collections.get("WGT_PipeSculpt")
+    assert wgt is not None and wgt.hide_viewport, "WGT collection missing/visible"
+    n = len(bpy.data.objects)
+    bpy.ops.pipe_sculpt.style_rig(scale=1.5)
+    assert len(bpy.data.objects) == n, "re-style leaked objects"
+    bpy.ops.pipe_sculpt.unstyle_rig()
+    assert arm.pose.bones["hand_ik.L"].custom_shape is None, "unstyle left a widget"
+
+
+check("rig styling (widgets/colours/idempotent/clear)", _rig_styling)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")
