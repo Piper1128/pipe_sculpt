@@ -18,8 +18,8 @@ Preview — matching uv_ops's checker behaviour.
 from __future__ import annotations
 
 import bpy
-from bpy.props import FloatProperty, IntProperty
-from bpy.types import Operator, Panel
+from bpy.props import BoolProperty, FloatProperty, IntProperty, PointerProperty
+from bpy.types import Operator, Panel, PropertyGroup
 
 from . import onion_core
 
@@ -28,6 +28,43 @@ GHOST_COLLECTION = "PipeSculpt Onion Skin"
 GHOST_PROP = "pipe_sculpt_onion_ghost"
 GHOST_PREFIX = "Onion"
 GHOST_MAT_PREFIX = "OnionGhostMat"
+
+
+# ----------------------------------------------------------------------
+# Live panel settings (persist on the scene, edited in the Onion panel)
+# ----------------------------------------------------------------------
+
+def _on_setting_changed(self, context):
+    """Live update: if ghosts are showing, rebuild them when a setting changes."""
+    if self.auto_refresh and _count_ghosts() > 0:
+        try:
+            bpy.ops.pipe_sculpt.onion_show('EXEC_DEFAULT')
+        except RuntimeError:
+            pass
+
+
+class PIPESCULPT_PG_onion(PropertyGroup):
+    frames_before: IntProperty(
+        name="Before", description="Ghosts before the current frame",
+        default=3, min=0, max=20, update=_on_setting_changed,
+    )
+    frames_after: IntProperty(
+        name="After", description="Ghosts after the current frame",
+        default=3, min=0, max=20, update=_on_setting_changed,
+    )
+    step: IntProperty(
+        name="Spacing", description="Frames between ghosts (1 = every frame)",
+        default=1, min=1, max=20, update=_on_setting_changed,
+    )
+    base_alpha: FloatProperty(
+        name="Opacity", description="Nearest ghost's opacity (far ones fade)",
+        default=0.5, min=0.05, max=1.0, subtype='FACTOR', update=_on_setting_changed,
+    )
+    auto_refresh: BoolProperty(
+        name="Auto-Refresh",
+        description="Rebuild ghosts automatically when a setting changes (while showing)",
+        default=True,
+    )
 
 
 # ----------------------------------------------------------------------
@@ -204,17 +241,29 @@ class PIPESCULPT_OT_onion_show(Operator):
     )
     bl_options = {'REGISTER', 'UNDO'}
 
-    frames_before: IntProperty(name="Before", default=3, min=0, max=20)
-    frames_after: IntProperty(name="After", default=3, min=0, max=20)
-    step: IntProperty(name="Step", default=1, min=1, max=10)
-    base_alpha: FloatProperty(name="Opacity", default=0.5, min=0.05, max=1.0, subtype='FACTOR')
+    # -1 sentinel = "use the scene panel setting". Explicit values (incl. from
+    # scripting / the redo panel) override. Lets the panel be the live control
+    # surface while keeping the operator scriptable.
+    frames_before: IntProperty(name="Before", default=-1, min=-1, max=20)
+    frames_after: IntProperty(name="After", default=-1, min=-1, max=20)
+    step: IntProperty(name="Spacing", default=-1, min=-1, max=20)
+    base_alpha: FloatProperty(name="Opacity", default=-1.0, min=-1.0, max=1.0)
 
     @classmethod
     def poll(cls, context):
         return len(_source_meshes(context)) > 0
 
+    def _resolved_settings(self, context):
+        s = context.scene.pipe_sculpt_onion
+        before = self.frames_before if self.frames_before >= 0 else s.frames_before
+        after = self.frames_after if self.frames_after >= 0 else s.frames_after
+        step = self.step if self.step >= 1 else s.step
+        alpha = self.base_alpha if self.base_alpha >= 0.0 else s.base_alpha
+        return before, after, max(1, step), alpha
+
     def execute(self, context):
         sources = _source_meshes(context)
+        frames_before, frames_after, step, base_alpha = self._resolved_settings(context)
         if not sources:
             self.report({'ERROR'}, "No source mesh (select the mesh or its armature)")
             return {'CANCELLED'}
@@ -242,7 +291,7 @@ class PIPESCULPT_OT_onion_show(Operator):
             )
 
         frames = onion_core.ghost_frames(
-            original_frame, self.frames_before, self.frames_after, self.step,
+            original_frame, frames_before, frames_after, step,
             frame_min=lo, frame_max=hi,
         )
         if not frames:
@@ -252,13 +301,13 @@ class PIPESCULPT_OT_onion_show(Operator):
         # Rebuild from scratch each time so Show doubles as Refresh
         _clear_ghosts(context)
 
-        max_dist = max(self.frames_before, self.frames_after) * self.step
+        max_dist = max(frames_before, frames_after) * step
         # ghost objects grouped by source, to detect "no animation" afterwards
         per_source = {s.name: [] for s in sources}
         try:
             for f in frames:
                 scene.frame_set(int(f))
-                tint = onion_core.ghost_tint(f, original_frame, max_dist, self.base_alpha)
+                tint = onion_core.ghost_tint(f, original_frame, max_dist, base_alpha)
                 for src in sources:
                     per_source[src.name].append(_make_ghost(context, src, f, tint))
         finally:
@@ -315,8 +364,19 @@ class PIPESCULPT_PT_onion(Panel):
 
     def draw(self, context):
         layout = self.layout
+        s = context.scene.pipe_sculpt_onion
         n = _count_ghosts()
 
+        # Live controls
+        col = layout.column(align=True)
+        row = col.row(align=True)
+        row.prop(s, "frames_before")
+        row.prop(s, "frames_after")
+        col.prop(s, "step")
+        col.prop(s, "base_alpha", slider=True)
+        col.prop(s, "auto_refresh")
+
+        layout.separator()
         col = layout.column(align=True)
         col.scale_y = 1.3
         col.operator("pipe_sculpt.onion_show", icon='ONIONSKIN_ON')
@@ -328,6 +388,7 @@ class PIPESCULPT_PT_onion(Panel):
 
 
 _classes = (
+    PIPESCULPT_PG_onion,
     PIPESCULPT_OT_onion_show,
     PIPESCULPT_OT_onion_clear,
     PIPESCULPT_PT_onion,
@@ -337,8 +398,11 @@ _classes = (
 def register():
     for c in _classes:
         bpy.utils.register_class(c)
+    bpy.types.Scene.pipe_sculpt_onion = PointerProperty(type=PIPESCULPT_PG_onion)
 
 
 def unregister():
+    if hasattr(bpy.types.Scene, "pipe_sculpt_onion"):
+        del bpy.types.Scene.pipe_sculpt_onion
     for c in reversed(_classes):
         bpy.utils.unregister_class(c)

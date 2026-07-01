@@ -286,6 +286,33 @@ def _onion_skin():
 
 check("onion skin (show/clear, leak-free)", _onion_skin)
 
+
+def _multires_guard():
+    # Generate Rig must refuse a mesh with a Multires modifier (high-poly
+    # sculpt → 1-FPS posing) unless overridden. Count armatures before/after
+    # since the audit shares one Blender session (prior tests made armatures).
+    def n_arms():
+        return sum(1 for o in bpy.data.objects if o.type == 'ARMATURE')
+
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    mesh = bpy.context.active_object
+    mesh.modifiers.new("Multires", 'MULTIRES')
+    before = n_arms()
+    blocked = False
+    try:
+        bpy.ops.pipe_sculpt.generate_rig()
+    except RuntimeError as e:
+        blocked = "Multires" in str(e)
+    assert blocked, "Generate Rig did not block a Multires mesh"
+    assert n_arms() == before, "armature created despite guard"
+    # Override works
+    res = bpy.ops.pipe_sculpt.generate_rig(allow_multires=True)
+    assert res == {'FINISHED'}, f"override failed: {res}"
+    assert n_arms() == before + 1, "override made no armature"
+
+
+check("multires rig guard (block + override)", _multires_guard)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")

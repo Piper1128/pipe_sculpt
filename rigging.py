@@ -594,6 +594,16 @@ class PIPESCULPT_OT_generate_rig(Operator):
     )
     bl_options = {'REGISTER', 'UNDO'}
 
+    allow_multires: bpy.props.BoolProperty(
+        name="Rig High-Poly Anyway",
+        description=(
+            "Force rigging a mesh that still has a Multires modifier. Posing it "
+            "deforms the full subdivided mesh every frame (very slow) — normally "
+            "you rig the retopo low-poly instead"
+        ),
+        default=False,
+    )
+
     @classmethod
     def poll(cls, context):
         obj = context.active_object
@@ -606,6 +616,29 @@ class PIPESCULPT_OT_generate_rig(Operator):
 
     def execute(self, context):
         mesh_obj = context.active_object
+
+        # Guard: rigging a Multires (high-poly sculpt) mesh means the armature
+        # deforms the full subdivided cage every frame → 1-FPS posing. Almost
+        # always the user meant to rig the retopo low-poly. Block with a clear
+        # message unless they explicitly override.
+        if not self.allow_multires:
+            multires = next((m for m in mesh_obj.modifiers if m.type == 'MULTIRES'), None)
+            if multires is not None:
+                self.report(
+                    {'ERROR'},
+                    f"'{mesh_obj.name}' has a Multires modifier — this is the high-poly "
+                    "sculpt. Rig the retopo LOW-POLY instead (posing multires is very "
+                    "slow). Use Retopo first, or enable 'Rig High-Poly Anyway' to force",
+                )
+                return {'CANCELLED'}
+            # Soft warning for a very dense mesh even without multires
+            if len(mesh_obj.data.vertices) > 150_000:
+                self.report(
+                    {'WARNING'},
+                    f"'{mesh_obj.name}' has {len(mesh_obj.data.vertices):,} verts — "
+                    "posing may be slow. Consider retopo first",
+                )
+
         # Snapshot the user's prior mode so we can restore it. Generate Rig
         # bounces through OBJECT → EDIT → OBJECT → WEIGHT_PAINT → OBJECT →
         # POSE → OBJECT, which silently broke the user's session if they
