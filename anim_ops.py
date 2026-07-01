@@ -13,10 +13,13 @@ Phase 1 sections:
 from __future__ import annotations
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty
-from bpy.types import Operator, Panel
+from bpy.props import (
+    BoolProperty, EnumProperty, FloatProperty, PointerProperty, StringProperty,
+)
+from bpy.types import Operator, Panel, PropertyGroup
 
 from . import anim_core
+from . import picker_core
 
 
 # Module-level pose buffer for copy/paste. dict[bone_name] = (loc, quat, scale)
@@ -698,6 +701,173 @@ class PIPESCULPT_OT_anim_bake_in_place(Operator):
 
 
 # ======================================================================
+# Intuitive-animation helpers (design-panel build-now tier)
+# ======================================================================
+
+class PIPESCULPT_PG_record(PropertyGroup):
+    """Stash of the user's prior auto-key settings so Record can restore them."""
+    stashed: BoolProperty(default=False)
+    prev_auto: BoolProperty(default=False)
+    prev_needed: BoolProperty(default=True)
+    prev_mode: StringProperty(default='ADD_REPLACE_KEYS')
+
+
+class PIPESCULPT_OT_anim_record_toggle(Operator):
+    bl_idname = "pipe_sculpt.anim_record_toggle"
+    bl_label = "Record"
+    bl_description = (
+        "Toggle Record mode. ON = auto-keyframing with the right settings so "
+        "every bone you move is saved at the current frame (the #1 fix for "
+        "'my pose disappeared'). OFF restores your prior auto-key settings"
+    )
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        ts = context.scene.tool_settings
+        # "Only insert needed" for auto-key is a USER PREFERENCE in Blender 5.1
+        # (preferences.edit.use_auto_keyframe_insert_needed), not a tool setting.
+        prefs = context.preferences.edit
+        rec = context.scene.pipe_sculpt_record
+        if not ts.use_keyframe_insert_auto:
+            # Enable: stash prior state, then set the beginner-correct settings
+            rec.prev_auto = ts.use_keyframe_insert_auto
+            rec.prev_needed = prefs.use_auto_keyframe_insert_needed
+            rec.prev_mode = ts.auto_keying_mode
+            rec.stashed = True
+            ts.use_keyframe_insert_auto = True
+            # needed=False so the FIRST move on a fresh bone actually records
+            prefs.use_auto_keyframe_insert_needed = False
+            ts.auto_keying_mode = 'REPLACE_KEYS'
+            try:
+                bpy.ops.anim.keying_set_active_set(type='BUILTIN_KSI_LocRotScale')
+            except (RuntimeError, TypeError):
+                pass
+            self.report({'INFO'}, "Record ON — every move is keyed")
+        else:
+            # Disable: restore stash if we set it, else just turn auto-key off
+            if rec.stashed:
+                ts.use_keyframe_insert_auto = rec.prev_auto
+                prefs.use_auto_keyframe_insert_needed = rec.prev_needed
+                ts.auto_keying_mode = rec.prev_mode
+                rec.stashed = False
+            else:
+                ts.use_keyframe_insert_auto = False
+            self.report({'INFO'}, "Record OFF")
+        return {'FINISHED'}
+
+
+# Posing pivot presets: intent-name → (pivot_point, orientation)
+_PIVOT_PRESETS = {
+    'JOINT':     ('INDIVIDUAL_ORIGINS', 'NORMAL'),
+    'SELECTION': ('MEDIAN_POINT', 'GLOBAL'),
+    'CURSOR':    ('CURSOR', 'GLOBAL'),
+}
+
+
+class PIPESCULPT_OT_anim_pivot(Operator):
+    bl_idname = "pipe_sculpt.anim_pivot"
+    bl_label = "Posing Pivot"
+    bl_description = (
+        "Set how bones rotate. 'Around Joint' = each bone spins around its own "
+        "joint along its own axis (the natural feel); 'Around Selection' = "
+        "around the group's center; 'Around Cursor' = around the 3D cursor"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    mode: EnumProperty(
+        items=(
+            ('JOINT', "Around Joint", "Each bone around its own joint (Normal axes)"),
+            ('SELECTION', "Around Selection", "Around the selection center"),
+            ('CURSOR', "Around Cursor", "Around the 3D cursor"),
+        ),
+        default='JOINT',
+    )
+
+    def execute(self, context):
+        pivot, orient = _PIVOT_PRESETS[self.mode]
+        ts = context.scene.tool_settings
+        ts.transform_pivot_point = pivot
+        context.scene.transform_orientation_slots[0].type = orient
+        self.report({'INFO'}, f"Posing pivot: {self.mode.title()}")
+        return {'FINISHED'}
+
+
+def _selected_bone_keyframes(context, arm):
+    """All keyframe frames on the selected pose bones (or all bones if none)."""
+    selected = context.selected_pose_bones or list(arm.pose.bones)
+    names = {pb.name for pb in selected}
+    frames = []
+    for fc in _action_fcurves(arm):
+        dp = fc.data_path
+        # data_path is pose.bones["name"].channel — match by the bone name token
+        if any(f'["{n}"]' in dp for n in names):
+            frames.extend(kp.co[0] for kp in fc.keyframe_points)
+    return frames
+
+
+class PIPESCULPT_OT_anim_key_nav(Operator):
+    bl_idname = "pipe_sculpt.anim_key_nav"
+    bl_label = "Jump to Key"
+    bl_description = "Jump the playhead to the nearest keyframe of the selected bones"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    direction: EnumProperty(
+        items=(('PREV', "Previous", ""), ('NEXT', "Next", "")),
+        default='NEXT',
+    )
+
+    @classmethod
+    def poll(cls, context):
+        arm = _armature_in_pose(context)
+        return arm is not None and _active_action(arm) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        frames = _selected_bone_keyframes(context, arm)
+        target = anim_core.nearest_key(frames, context.scene.frame_current, self.direction)
+        if target is None:
+            self.report({'INFO'}, f"No {self.direction.lower()} key on the selected bone(s)")
+            return {'CANCELLED'}
+        context.scene.frame_set(int(target))
+        return {'FINISHED'}
+
+
+class PIPESCULPT_OT_anim_lock_deform(Operator):
+    bl_idname = "pipe_sculpt.anim_lock_deform"
+    bl_label = "Only Controls"
+    bl_description = (
+        "Make deform bones unselectable so a click can only ever land on a "
+        "control (IK target, pole, root). Click again to unlock everything"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return _armature_in_pose(context) is not None
+
+    def execute(self, context):
+        arm = _armature_in_pose(context)
+        bones = arm.data.bones
+        # Locked = every deform bone currently hide_select. Toggle that state.
+        deform_bones = [
+            b for b in bones
+            if picker_core.classify_bone(b.name).group != 'control'
+        ]
+        currently_locked = deform_bones and all(b.hide_select for b in deform_bones)
+        for b in bones:
+            is_control = picker_core.classify_bone(b.name).group == 'control'
+            b.hide_select = False if (currently_locked or is_control) else True
+        state = "unlocked — all bones selectable" if currently_locked else "locked — controls only"
+        self.report({'INFO'}, f"Selection {state}")
+        return {'FINISHED'}
+
+
+def _is_deform_locked(arm):
+    deform = [b for b in arm.data.bones if picker_core.classify_bone(b.name).group != 'control']
+    return bool(deform) and all(b.hide_select for b in deform)
+
+
+# ======================================================================
 # Animate panel — pose-mode only (sits between Rigging and Export)
 # ======================================================================
 
@@ -716,9 +886,50 @@ class PIPESCULPT_PT_animate(Panel):
 
     def draw(self, context):
         layout = self.layout
+        arm = _armature_in_pose(context)
+        ts = context.scene.tool_settings
+        recording = ts.use_keyframe_insert_auto
 
+        # --- Record banner (unmissable ON/OFF state) ---
+        box = layout.box()
+        box.alert = not recording
+        row = box.row()
+        row.scale_y = 1.4
+        if recording:
+            row.label(text="● RECORDING — moves are saved", icon='REC')
+            row.operator("pipe_sculpt.anim_record_toggle", text="Stop")
+        else:
+            row.label(text="NOT recording", icon='RADIOBUT_OFF')
+            row.operator("pipe_sculpt.anim_record_toggle", text="Record", icon='REC')
+
+        # Contextual warning: mid-animation with auto-key off = losing work
+        if not recording and _active_action(arm) is not None:
+            warn = layout.box()
+            warn.alert = True
+            warn.label(text="Auto-key OFF — moves won't save", icon='ERROR')
+
+        # --- Posing pivot chips ---
+        col = layout.column(align=True)
+        col.label(text="Rotate around", icon='ORIENTATION_NORMAL')
+        cur_pivot = ts.transform_pivot_point
+        cur_orient = context.scene.transform_orientation_slots[0].type
+        row = col.row(align=True)
+        for mode, label in (('JOINT', "Joint"), ('SELECTION', "Selection"), ('CURSOR', "Cursor")):
+            p, o = _PIVOT_PRESETS[mode]
+            row.operator(
+                "pipe_sculpt.anim_pivot", text=label,
+                depress=(cur_pivot == p and cur_orient == o),
+            ).mode = mode
+
+        layout.separator()
         col = layout.column(align=True)
         col.label(text="Pose", icon='POSE_HLT')
+        col.operator(
+            "pipe_sculpt.anim_lock_deform",
+            text="Unlock All Bones" if _is_deform_locked(arm) else "Lock to Controls Only",
+            icon='LOCKED' if _is_deform_locked(arm) else 'UNLOCKED',
+            depress=_is_deform_locked(arm),
+        )
         row = col.row(align=True)
         row.operator("pipe_sculpt.anim_copy_pose", text="Copy")
         op = row.operator("pipe_sculpt.anim_paste_pose", text="Paste")
@@ -733,6 +944,16 @@ class PIPESCULPT_PT_animate(Panel):
         layout.separator()
         col = layout.column(align=True)
         col.label(text="Key", icon='KEYINGSET')
+        # Keyframe navigator + is-this-frame-keyed readout
+        if _active_action(arm) is not None:
+            frames = _selected_bone_keyframes(context, arm)
+            keyed = anim_core.is_keyed_at(frames, context.scene.frame_current)
+            nav = col.row(align=True)
+            nav.operator("pipe_sculpt.anim_key_nav", text="◀ Prev Key").direction = 'PREV'
+            info = nav.row(align=True)
+            info.alert = not keyed
+            info.label(text="KEYED" if keyed else "not keyed", icon='KEYFRAME_HLT' if keyed else 'KEYFRAME')
+            nav.operator("pipe_sculpt.anim_key_nav", text="Next Key ▶").direction = 'NEXT'
         row = col.row(align=True)
         row.operator("pipe_sculpt.anim_key_rig", text="Key Rig")
         row.operator("pipe_sculpt.anim_key_selected", text="Key Sel")
@@ -748,11 +969,16 @@ class PIPESCULPT_PT_animate(Panel):
 
 
 _pose_classes = (
+    PIPESCULPT_PG_record,
     PIPESCULPT_OT_anim_copy_pose,
     PIPESCULPT_OT_anim_paste_pose,
     PIPESCULPT_OT_anim_mirror_pose,
     PIPESCULPT_OT_anim_breakdown,
     PIPESCULPT_OT_anim_reset_pose,
+    PIPESCULPT_OT_anim_record_toggle,
+    PIPESCULPT_OT_anim_pivot,
+    PIPESCULPT_OT_anim_key_nav,
+    PIPESCULPT_OT_anim_lock_deform,
     PIPESCULPT_OT_anim_key_rig,
     PIPESCULPT_OT_anim_key_selected,
     PIPESCULPT_OT_anim_toggle_interp,
@@ -767,8 +993,11 @@ _pose_classes = (
 def register():
     for c in _pose_classes:
         bpy.utils.register_class(c)
+    bpy.types.Scene.pipe_sculpt_record = PointerProperty(type=PIPESCULPT_PG_record)
 
 
 def unregister():
+    if hasattr(bpy.types.Scene, "pipe_sculpt_record"):
+        del bpy.types.Scene.pipe_sculpt_record
     for c in reversed(_pose_classes):
         bpy.utils.unregister_class(c)

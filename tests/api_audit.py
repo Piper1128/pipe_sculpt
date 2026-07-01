@@ -177,6 +177,30 @@ def _anim_pose_tools():
 check("anim pose tools (copy/mirror/reset)", _anim_pose_tools)
 
 
+def _anim_intuitive_tools():
+    # Record toggle, posing pivot, lock-to-controls, keyframe navigator.
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    ts = bpy.context.scene.tool_settings
+    bpy.ops.pipe_sculpt.anim_record_toggle()
+    assert ts.use_keyframe_insert_auto, "Record ON did not enable auto-key"
+    bpy.ops.pipe_sculpt.anim_record_toggle()
+    assert not ts.use_keyframe_insert_auto, "Record OFF did not restore"
+    bpy.ops.pipe_sculpt.anim_pivot(mode='JOINT')
+    assert ts.transform_pivot_point == 'INDIVIDUAL_ORIGINS'
+    bpy.ops.pipe_sculpt.anim_lock_deform()
+    bpy.ops.pipe_sculpt.anim_lock_deform()
+    bpy.ops.pipe_sculpt.anim_key_rig()
+    bpy.ops.pipe_sculpt.anim_key_nav('EXEC_DEFAULT', direction='PREV')
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+check("anim intuitive tools (record/pivot/lock/key-nav)", _anim_intuitive_tools)
+
+
 def _anim_keying_loop_breakdown():
     # Keys two frames, then exercises the slotted-action fcurve path:
     # key rig, make cyclic, validate loop, toggle interp, breakdown (exec).

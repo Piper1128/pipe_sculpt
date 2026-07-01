@@ -243,6 +243,36 @@ def root_motion_delta(keys):
 # Frame-range helpers
 # ======================================================================
 
+def nearest_key(key_frames, current, direction: str):
+    """Nearest keyframe strictly before/after `current`.
+
+    key_frames: iterable of frame numbers (any order, duplicates ok).
+    direction: 'NEXT' → first key > current; 'PREV' → last key < current.
+    Returns the frame (int) or None if there's no key on that side.
+    """
+    fs = sorted({int(round(f)) for f in key_frames})
+    cur = int(round(current))
+    if direction == 'NEXT':
+        for f in fs:
+            if f > cur:
+                return f
+        return None
+    # PREV
+    prev = None
+    for f in fs:
+        if f < cur:
+            prev = f
+        else:
+            break
+    return prev
+
+
+def is_keyed_at(key_frames, frame) -> bool:
+    """True if any of the given keyframes lands exactly on `frame`."""
+    target = int(round(frame))
+    return any(int(round(f)) == target for f in key_frames)
+
+
 def fit_preview_range(frame_start: int, frame_end: int):
     """Clamp/normalise an action's frame range into a valid preview range.
 

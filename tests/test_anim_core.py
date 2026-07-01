@@ -228,6 +228,49 @@ class TestRootMotionDelta:
         assert ac.root_motion_delta([]) == (0.0, 0.0)
 
 
+class TestNearestKey:
+    def test_next_basic(self):
+        assert ac.nearest_key([1, 5, 10], 3, 'NEXT') == 5
+
+    def test_prev_basic(self):
+        assert ac.nearest_key([1, 5, 10], 7, 'PREV') == 5
+
+    def test_next_none_past_last(self):
+        assert ac.nearest_key([1, 5, 10], 10, 'NEXT') is None
+
+    def test_prev_none_before_first(self):
+        assert ac.nearest_key([1, 5, 10], 1, 'PREV') is None
+
+    def test_on_a_key_skips_it(self):
+        # Sitting exactly on frame 5, next is 10 and prev is 1 (5 excluded)
+        assert ac.nearest_key([1, 5, 10], 5, 'NEXT') == 10
+        assert ac.nearest_key([1, 5, 10], 5, 'PREV') == 1
+
+    def test_empty(self):
+        assert ac.nearest_key([], 5, 'NEXT') is None
+        assert ac.nearest_key([], 5, 'PREV') is None
+
+    def test_unsorted_and_dupes(self):
+        assert ac.nearest_key([10, 1, 5, 5, 1], 3, 'NEXT') == 5
+
+    def test_float_frames_rounded(self):
+        assert ac.nearest_key([1.4, 5.6], 3, 'NEXT') == 6
+
+
+class TestIsKeyedAt:
+    def test_hit(self):
+        assert ac.is_keyed_at([1, 5, 10], 5)
+
+    def test_miss(self):
+        assert not ac.is_keyed_at([1, 5, 10], 7)
+
+    def test_float_round(self):
+        assert ac.is_keyed_at([5.4], 5)
+
+    def test_empty(self):
+        assert not ac.is_keyed_at([], 5)
+
+
 class TestFitPreviewRange:
     def test_normal_order(self):
         assert ac.fit_preview_range(1, 30) == (1, 30)
