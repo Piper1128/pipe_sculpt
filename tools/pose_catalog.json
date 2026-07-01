@@ -1,0 +1,1520 @@
+{
+ "poses": [
+  {
+   "name": "T_POSE",
+   "label": "T-Pose",
+   "category": "Stance",
+   "description": "Canonical bind/calibration pose. All FK bones zero, all IK controls at rest. Arms horizontal at Z=0.400, legs straight down. The only pose that intentionally has zero bend margin (dead-straight limbs) \u2014 use strictly as skinning/retarget reference.",
+   "symmetric": true,
+   "fk": [],
+   "controls": []
+  },
+  {
+   "name": "A_POSE",
+   "label": "A-Pose",
+   "category": "Stance",
+   "description": "Relaxed calibration pose; arms lowered along a clean diagonal so the deltoid skins naturally. Hand target clamped to 0.714 from shoulder (was 0.75 at the limit) to leave a hair of IK bend so the arm does not lock straight.",
+   "symmetric": true,
+   "fk": [
+    {
+     "bone": "clavicle.L",
+     "euler_deg": [
+      0,
+      0,
+      6
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.18,
+      0,
+      -0.43
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      -0.05,
+      -0.1,
+      -0.3
+     ]
+    }
+   ]
+  },
+  {
+   "name": "RELAXED_IDLE",
+   "label": "Relaxed Idle",
+   "category": "Stance",
+   "description": "Neutral standing base \u2014 weight even, arms hang just ahead of the thighs with a soft elbow bend, chest lifted a touch, soft knees. The blend-tree centre every state cross-fades from. Hand dist 0.436, foot micro-stance \u2014 all comfortably inside reach.",
+   "symmetric": true,
+   "fk": [
+    {
+     "bone": "spine",
+     "euler_deg": [
+      -2,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      3,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      2,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "clavicle.L",
+     "euler_deg": [
+      0,
+      0,
+      4
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.42,
+      0.05,
+      -0.28
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.06,
+      -0.06,
+      0
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0.02,
+      0,
+      0.02
+     ]
+    },
+    {
+     "bone": "knee_pole.L",
+     "offset": [
+      0,
+      0.03,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "CONTRAPPOSTO_HIP",
+   "label": "Contrapposto (Weight Shift)",
+   "category": "Stance",
+   "description": "Living-idle weight shift onto the LEFT leg \u2014 hip hikes over the weighted foot, spine S-curves to counter, free (R) foot eases out+forward+in with a light heel and broken knee. Genuinely asymmetric so both sides are given explicitly (do not auto-mirror). Free-foot dist 0.933. NOTE: pelvis Z sign assumes +Z hikes the left hip; flip pelvis/head Z if the left hip drops in-editor.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "pelvis",
+     "euler_deg": [
+      0,
+      0,
+      7
+     ]
+    },
+    {
+     "bone": "spine",
+     "euler_deg": [
+      0,
+      0,
+      -4
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      0,
+      0,
+      3
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      0,
+      0,
+      -5
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.45,
+      0.06,
+      -0.3
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.05,
+      -0.05,
+      0
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "knee_pole.L",
+     "offset": [
+      0,
+      0.02,
+      0
+     ]
+    },
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.4,
+      0.1,
+      -0.28
+     ]
+    },
+    {
+     "bone": "elbow_pole.R",
+     "offset": [
+      -0.05,
+      -0.05,
+      0
+     ]
+    },
+    {
+     "bone": "foot_ik.R",
+     "offset": [
+      -0.06,
+      0.08,
+      0.04
+     ]
+    },
+    {
+     "bone": "knee_pole.R",
+     "offset": [
+      0,
+      0.06,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "POWER_STANCE_ARMS_CROSSED",
+   "label": "Power Stance (Arms Crossed)",
+   "category": "Stance",
+   "description": "Confident/skeptical hero portrait: feet a touch wider than hips, forearms folded across the chest (right forearm on top). Foot offset widened with a small lift to 0.931 (a flat wide stance alone hits the 0.968 straight-leg limit). Hands cross the chest at 0.687/0.638. Asymmetric fold \u2014 both arms given.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "chest",
+     "euler_deg": [
+      4,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "neck",
+     "euler_deg": [
+      -3,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      0,
+      0,
+      -4
+     ]
+    },
+    {
+     "bone": "index_01.L",
+     "euler_deg": [
+      20,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "index_01.R",
+     "euler_deg": [
+      20,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0.08,
+      0,
+      0.04
+     ]
+    },
+    {
+     "bone": "foot_ik.R",
+     "offset": [
+      -0.08,
+      0,
+      0.04
+     ]
+    },
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      1.35,
+      0.3,
+      -0.15
+     ]
+    },
+    {
+     "bone": "elbow_pole.R",
+     "offset": [
+      0.3,
+      0.1,
+      -0.3
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -1.3,
+      0.32,
+      -0.05
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      -0.3,
+      0.1,
+      -0.28
+     ]
+    }
+   ]
+  },
+  {
+   "name": "CROUCH_SNEAK",
+   "label": "Crouch / Sneak",
+   "category": "Stance",
+   "description": "Lowered stealth stance: root drops 0.32 (whole body lowers), deep knee bend, torso pitched forward with head kept level, hands drawn in and ready near chest. Foot offset adds +0.30 Z to keep feet on the floor as the root sinks (apply root offset first, then foot). Deep-bend leg ~0.33, strongly folded (intended). Hand dist 0.373.",
+   "symmetric": true,
+   "fk": [
+    {
+     "bone": "pelvis",
+     "euler_deg": [
+      10,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "spine",
+     "euler_deg": [
+      18,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      8,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "neck",
+     "euler_deg": [
+      -10,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      -6,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "foot.L",
+     "euler_deg": [
+      -8,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "root",
+     "offset": [
+      0,
+      0,
+      -0.32
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0.03,
+      0.05,
+      0.32
+     ]
+    },
+    {
+     "bone": "knee_pole.L",
+     "offset": [
+      0,
+      0.12,
+      0
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.45,
+      0.22,
+      0.02
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.05,
+      -0.05,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "SITTING_RELAXED",
+   "label": "Sitting (Invisible Chair)",
+   "category": "Stance",
+   "description": "Seated on an implied stool: root drops 0.42 and nudges forward so thighs go horizontal, knees bent ~90 via strong +Y knee pole, feet flat, hands resting on thighs. Foot offset adds +0.42 Z to cancel the root drop. With the dropped root the shoulder also lowers, so hand-on-thigh dist is only 0.44 and knee-bend leg ~0.47. Apply root first, then feet/hands.",
+   "symmetric": true,
+   "fk": [
+    {
+     "bone": "pelvis",
+     "euler_deg": [
+      8,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      6,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "foot.L",
+     "euler_deg": [
+      10,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "root",
+     "offset": [
+      0,
+      0.05,
+      -0.42
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0,
+      0.45,
+      0.42
+     ]
+    },
+    {
+     "bone": "knee_pole.L",
+     "offset": [
+      0,
+      0.2,
+      0.05
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.48,
+      0.32,
+      -0.5
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.1,
+      -0.1,
+      -0.15
+     ]
+    }
+   ]
+  },
+  {
+   "name": "AIM_READY_2H",
+   "label": "Aim / Ready (Two-Hand)",
+   "category": "Stance",
+   "description": "Weapon-up firing stance: right hand at the trigger (0.586), left hand forward on the fore-end (0.712, deliberately near reach for an extended support arm), torso bladed, shoulder into the stock, bladed foot stance. Asymmetric two-hand grip \u2014 both sides given. Author the weapon-mesh grip points to these world targets.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "spine",
+     "euler_deg": [
+      0,
+      -8,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      3,
+      -6,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      0,
+      -4,
+      0
+     ]
+    },
+    {
+     "bone": "clavicle.R",
+     "euler_deg": [
+      0,
+      0,
+      -6
+     ]
+    },
+    {
+     "bone": "clavicle.L",
+     "euler_deg": [
+      8,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.55,
+      0.55,
+      -0.02
+     ]
+    },
+    {
+     "bone": "elbow_pole.R",
+     "offset": [
+      -0.05,
+      -0.1,
+      0
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.4,
+      0.62,
+      -0.02
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.05,
+      -0.1,
+      0
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0.06,
+      0.05,
+      0.02
+     ]
+    },
+    {
+     "bone": "foot_ik.R",
+     "offset": [
+      -0.04,
+      -0.14,
+      0.02
+     ]
+    }
+   ]
+  },
+  {
+   "name": "WALK_CONTACT_L",
+   "label": "Walk \u2014 Contact (L Fwd)",
+   "category": "Locomotion",
+   "description": "Stride contact key: LEFT foot heel-strikes forward (0.944, trimmed from 0.983 by adding a small heel lift), RIGHT foot at toe-off behind (0.939). Opposite-arm swing \u2014 L arm back, R arm forward. Pelvis twists toward the trailing leg, ribcage counter-rotates. Asymmetric contact \u2014 both sides given; mirror it in time for the R-contact key.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "pelvis",
+     "euler_deg": [
+      0,
+      6,
+      0
+     ]
+    },
+    {
+     "bone": "spine",
+     "euler_deg": [
+      0,
+      -3,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      0,
+      -5,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      0,
+      2,
+      0
+     ]
+    },
+    {
+     "bone": "foot.L",
+     "euler_deg": [
+      -12,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "foot.R",
+     "euler_deg": [
+      22,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0,
+      0.22,
+      0.05
+     ]
+    },
+    {
+     "bone": "knee_pole.L",
+     "offset": [
+      0,
+      0.05,
+      0
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.38,
+      -0.18,
+      -0.22
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.04,
+      -0.08,
+      0
+     ]
+    },
+    {
+     "bone": "foot_ik.R",
+     "offset": [
+      0,
+      -0.24,
+      0.06
+     ]
+    },
+    {
+     "bone": "knee_pole.R",
+     "offset": [
+      0,
+      0.1,
+      0
+     ]
+    },
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.32,
+      0.2,
+      -0.2
+     ]
+    },
+    {
+     "bone": "elbow_pole.R",
+     "offset": [
+      -0.04,
+      -0.06,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "WALK_PASSING_L",
+   "label": "Walk \u2014 Passing",
+   "category": "Locomotion",
+   "description": "The 'up' position between contacts: RIGHT (swing) leg lifts up under the hip with a high bent knee (swing foot 0.75), LEFT (support) leg planted straight and vertical (0.948). Body rides up ~0.03 over the support leg; the planted foot subtracts that rise to stay on the floor. Arms pass through near-neutral. Asymmetric \u2014 both sides given.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "pelvis",
+     "euler_deg": [
+      0,
+      0,
+      3
+     ]
+    },
+    {
+     "bone": "spine",
+     "euler_deg": [
+      -1,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "foot.R",
+     "euler_deg": [
+      -18,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "root",
+     "offset": [
+      0,
+      0,
+      0.02
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0,
+      0,
+      0.0
+     ]
+    },
+    {
+     "bone": "knee_pole.L",
+     "offset": [
+      0,
+      0.02,
+      0
+     ]
+    },
+    {
+     "bone": "foot_ik.R",
+     "offset": [
+      0,
+      0.06,
+      0.22
+     ]
+    },
+    {
+     "bone": "knee_pole.R",
+     "offset": [
+      0,
+      0.16,
+      0
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.4,
+      0,
+      -0.24
+     ]
+    },
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.4,
+      0,
+      -0.24
+     ]
+    }
+   ]
+  },
+  {
+   "name": "RUN_CONTACT_L",
+   "label": "Run \u2014 Contact / Drive (L Fwd)",
+   "category": "Locomotion",
+   "description": "Aggressive run stride: LEFT foot strikes under the mass near CoM (short forward reach, 0.926), RIGHT leg drives fully back with heel high (0.825), torso pitched forward, arms pumping bent ~90 opposite the legs (hands rise toward chest/hip). Root compresses 0.10 at contact. Asymmetric \u2014 both sides given; mirror in time for R-contact.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "pelvis",
+     "euler_deg": [
+      6,
+      8,
+      0
+     ]
+    },
+    {
+     "bone": "spine",
+     "euler_deg": [
+      14,
+      -4,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      10,
+      -6,
+      0
+     ]
+    },
+    {
+     "bone": "neck",
+     "euler_deg": [
+      -8,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      -10,
+      2,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "root",
+     "offset": [
+      0,
+      0,
+      -0.1
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0,
+      0.12,
+      0.05
+     ]
+    },
+    {
+     "bone": "knee_pole.L",
+     "offset": [
+      0,
+      0.14,
+      0
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.4,
+      -0.3,
+      0.05
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.05,
+      -0.14,
+      0
+     ]
+    },
+    {
+     "bone": "foot_ik.R",
+     "offset": [
+      0,
+      -0.3,
+      0.2
+     ]
+    },
+    {
+     "bone": "knee_pole.R",
+     "offset": [
+      0,
+      0.06,
+      0
+     ]
+    },
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.34,
+      0.34,
+      0.06
+     ]
+    },
+    {
+     "bone": "elbow_pole.R",
+     "offset": [
+      -0.05,
+      -0.12,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "REACH_FORWARD",
+   "label": "Reach Forward (Both Hands)",
+   "category": "Action",
+   "description": "Both arms extended forward at chest height, palms out \u2014 push / catch / 'stop'. Shoulders protract, upper back rounds, slight lean into the push. Hand dist 0.680, elbows soft and down-out. Symmetric.",
+   "symmetric": true,
+   "fk": [
+    {
+     "bone": "spine",
+     "euler_deg": [
+      4,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      6,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "clavicle.L",
+     "euler_deg": [
+      10,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      2,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.35,
+      0.55,
+      -0.02
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.02,
+      0.06,
+      -0.08
+     ]
+    }
+   ]
+  },
+  {
+   "name": "REACH_HIGH",
+   "label": "Reach Overhead (Extreme)",
+   "category": "Action",
+   "description": "Both arms stretch up-and-forward toward full extension \u2014 grab-a-ledge / surrender-high / stretch. Hands converge inboard as they rise (real overhead reach), ribcage opens with a slight back-bend, look up toward the hands. Hand dist 0.682, kept deliberately under 0.75 so the arm never straight-locks. Symmetric.",
+   "symmetric": true,
+   "fk": [
+    {
+     "bone": "spine",
+     "euler_deg": [
+      -6,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      -8,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "neck",
+     "euler_deg": [
+      4,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      6,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "clavicle.L",
+     "euler_deg": [
+      0,
+      0,
+      -14
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.48,
+      0.18,
+      0.6
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.1,
+      0.04,
+      -0.06
+     ]
+    }
+   ]
+  },
+  {
+   "name": "WAVE_HELLO",
+   "label": "Waving Hello",
+   "category": "Action",
+   "description": "Right arm raised beside the head, forearm vertical, mid-wave; left arm relaxed in A-pose; head and chest turn toward the wave. Waving-hand dist 0.427 (strong elbow bend, hand at head height), resting-hand dist 0.728. Asymmetric \u2014 both arms given. Open-hand fan on the fingers is optional.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "head",
+     "euler_deg": [
+      0,
+      0,
+      -6
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      0,
+      0,
+      -4
+     ]
+    },
+    {
+     "bone": "thumb_01.R",
+     "euler_deg": [
+      0,
+      0,
+      -12
+     ]
+    },
+    {
+     "bone": "index_01.R",
+     "euler_deg": [
+      -8,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "pinky_01.R",
+     "euler_deg": [
+      8,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.45,
+      0.05,
+      0.3
+     ]
+    },
+    {
+     "bone": "elbow_pole.R",
+     "offset": [
+      0.1,
+      -0.05,
+      -0.35
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.18,
+      0,
+      -0.43
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      -0.05,
+      -0.1,
+      -0.3
+     ]
+    }
+   ]
+  },
+  {
+   "name": "VICTORY_CHEER",
+   "label": "Victory / Cheer",
+   "category": "Action",
+   "description": "Both arms thrown up in a wide celebratory V, fists clenched, chest open, chin up. High-energy reel closer. Hand target CLAMPED to 0.612 from shoulder (raw draft offset overshot to 1.05 \u2014 the fists must come inboard as they rise since the arm is only 0.75 long and rest is already at shoulder height). The big vertical read comes from the chest/head lean, not from overstretching the arm. Symmetric.",
+   "symmetric": true,
+   "fk": [
+    {
+     "bone": "spine",
+     "euler_deg": [
+      -4,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      -8,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      -10,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "hand.L",
+     "euler_deg": [
+      0,
+      0,
+      -15
+     ]
+    },
+    {
+     "bone": "index_01.L",
+     "euler_deg": [
+      35,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "middle_01.L",
+     "euler_deg": [
+      35,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "ring_01.L",
+     "euler_deg": [
+      35,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "pinky_01.L",
+     "euler_deg": [
+      35,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.5,
+      0.1,
+      0.55
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.1,
+      0.1,
+      0.3
+     ]
+    }
+   ]
+  },
+  {
+   "name": "THINKING_CHIN",
+   "label": "Thinking / Hand-on-Chin",
+   "category": "Action",
+   "description": "Contemplative portrait: right hand to the chin with a supported forearm (0.365, deep bend), left arm crosses the torso to cradle the right elbow (0.472), head tilts down with a slight roll toward the chin hand. Asymmetric \u2014 both arms given. Index extended toward the jaw, other fingers curled.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "head",
+     "euler_deg": [
+      6,
+      0,
+      10
+     ]
+    },
+    {
+     "bone": "neck",
+     "euler_deg": [
+      4,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      0,
+      0,
+      5
+     ]
+    },
+    {
+     "bone": "hand.R",
+     "euler_deg": [
+      20,
+      0,
+      -25
+     ]
+    },
+    {
+     "bone": "index_01.R",
+     "euler_deg": [
+      -15,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "middle_01.R",
+     "euler_deg": [
+      40,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "ring_01.R",
+     "euler_deg": [
+      40,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.9,
+      0.28,
+      0.18
+     ]
+    },
+    {
+     "bone": "elbow_pole.R",
+     "offset": [
+      0.2,
+      0.1,
+      -0.55
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.85,
+      0.3,
+      -0.35
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      -0.2,
+      0.05,
+      -0.2
+     ]
+    }
+   ]
+  },
+  {
+   "name": "DRAMATIC_REACH",
+   "label": "Dramatic Reach",
+   "category": "Action",
+   "description": "One arm thrust forward-up reaching off-camera in a forward lunge; the other arm sweeps back as counterbalance. Reaching-hand CLAMPED to 0.711 (raw draft offset overshot 0.75 \u2014 the apparent extra reach comes from the big chest/spine forward lean, not the arm). Trailing hand 0.726. Front foot forward 0.937 (trimmed with a lift), rear foot trailing 0.918. Asymmetric \u2014 both sides given.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "chest",
+     "euler_deg": [
+      -18,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "spine",
+     "euler_deg": [
+      -8,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      -12,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "pelvis",
+     "euler_deg": [
+      6,
+      0,
+      0
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.15,
+      0.35,
+      0.15
+     ]
+    },
+    {
+     "bone": "elbow_pole.R",
+     "offset": [
+      -0.1,
+      -0.2,
+      0.1
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.3,
+      -0.45,
+      -0.35
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0,
+      -0.2,
+      -0.1
+     ]
+    },
+    {
+     "bone": "foot_ik.R",
+     "offset": [
+      0,
+      0.3,
+      0.08
+     ]
+    },
+    {
+     "bone": "knee_pole.R",
+     "offset": [
+      0,
+      0.1,
+      0
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0,
+      -0.3,
+      0.1
+     ]
+    }
+   ]
+  },
+  {
+   "name": "HIT_REACT_FLINCH",
+   "label": "Hit React (Flinch)",
+   "category": "Action",
+   "description": "Upper-body flinch from a frontal-left impact: torso recoils back and twists away, head snaps back+aside, near (L) hand flies up to guard the face (0.532), far (R) arm flails back, weight staggers onto the back foot (0.955). Root driven back+down. Best baked as a short snappy 1-frame extreme for an additive upper-body layer. Asymmetric \u2014 both sides given.",
+   "symmetric": false,
+   "fk": [
+    {
+     "bone": "spine",
+     "euler_deg": [
+      -16,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "chest",
+     "euler_deg": [
+      -10,
+      0,
+      8
+     ]
+    },
+    {
+     "bone": "neck",
+     "euler_deg": [
+      -14,
+      0,
+      0
+     ]
+    },
+    {
+     "bone": "head",
+     "euler_deg": [
+      -18,
+      0,
+      10
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "bone": "root",
+     "offset": [
+      0,
+      -0.06,
+      -0.03
+     ]
+    },
+    {
+     "bone": "hand_ik.L",
+     "offset": [
+      -0.3,
+      0.2,
+      0.2
+     ]
+    },
+    {
+     "bone": "elbow_pole.L",
+     "offset": [
+      0.05,
+      -0.05,
+      0.1
+     ]
+    },
+    {
+     "bone": "hand_ik.R",
+     "offset": [
+      0.35,
+      -0.15,
+      -0.15
+     ]
+    },
+    {
+     "bone": "foot_ik.L",
+     "offset": [
+      0.06,
+      -0.1,
+      0.02
+     ]
+    }
+   ]
+  }
+ ]
+}

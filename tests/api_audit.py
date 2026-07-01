@@ -221,6 +221,48 @@ def _anim_intuitive_tools():
 check("anim intuitive tools (record/pivot/lock/key-nav)", _anim_intuitive_tools)
 
 
+def _pose_library():
+    # Apply + insert standard poses; verify IK-solved bones are never keyed.
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    bpy.ops.pipe_sculpt.generate_rig()
+    arm = bpy.context.active_object
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='POSE')
+    s = bpy.context.scene.pipe_sculpt_pose_library
+
+    # Apply a real catalog pose — a control bone must actually move.
+    s.pose = 'RELAXED_IDLE'
+    s.mirror = False
+    s.influence = 1.0
+    s.selected_only = False
+    bpy.ops.pipe_sculpt.pose_apply()
+    hik = arm.pose.bones['hand_ik.L']
+    assert any(abs(v) > 1e-4 for v in hik.location), "pose_apply didn't move hand_ik.L"
+
+    # Mirror an asymmetric pose (must not error).
+    s.pose = 'WAVE_HELLO'
+    s.mirror = True
+    bpy.ops.pipe_sculpt.pose_apply()
+    s.mirror = False
+
+    # Insert at a frame — keys land on controls, NEVER on IK-solved bones.
+    s.pose = 'VICTORY_CHEER'
+    s.target_frame = 12
+    s.advance = 6
+    bpy.ops.pipe_sculpt.pose_insert()
+    from pipe_sculpt import anim_ops as _anim_ops
+    fcs = _anim_ops._action_fcurves(arm)
+    paths = {fc.data_path for fc in fcs}
+    assert 'pose.bones["hand_ik.L"].location' in paths, "control not keyed"
+    assert 'pose.bones["forearm.L"].rotation_quaternion' not in paths, \
+        "IK-solved forearm.L was keyed (should be excluded)"
+    assert s.target_frame == 18, "advance didn't step the frame"
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+check("pose library (apply / mirror / insert-at-frame)", _pose_library)
+
+
 def _anim_keying_loop_breakdown():
     # Keys two frames, then exercises the slotted-action fcurve path:
     # key rig, make cyclic, validate loop, toggle interp, breakdown (exec).

@@ -37,3 +37,6 @@ _load_module_by_path('clip_core', 'clip_core.py')
 _load_module_by_path('layer_core', 'layer_core.py')
 _load_module_by_path('onion_core', 'onion_core.py')
 _load_module_by_path('setup_core', 'setup_core.py')
+# pose_library_core does `import anim_core` as a fallback — anim_core must be
+# loaded first (above) so that resolves to the already-loaded top-level module.
+_load_module_by_path('pose_library_core', 'pose_library_core.py')
