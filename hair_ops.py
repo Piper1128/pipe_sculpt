@@ -3,29 +3,36 @@
 Born Clean per IronCore conventions: this file is the Adapter.Unity-
 equivalent — it imports bpy and translates user actions into Blender
 Hair Curves operations. All math (presets, density, card packing,
-memory estimation) lives in hair_core.py and is unit-tested headlessly.
+memory estimation, surface sampling) lives in hair_core.py and is
+unit-tested headlessly.
+
+Pose-following hair (the whole point of hair on a rigged character)
+needs three things, and this module sets up all of them:
+  1. A non-overlapping UV map on the surface. Blender's hair sculpt
+     brushes reject overlapping UVs ("UV islands must not overlap"),
+     which is exactly what a Mirror-X paint UV produces. We give hair
+     its own dedicated UV (`PipeSculpt_HairUV`) via Smart UV Project so
+     the user's paint/mirror UV is never disturbed.
+  2. The native 'Deform Curves on Surface' modifier + a parent to the
+     mesh — both created for us by `object.curves_empty_hair_add`. This
+     is what makes the hair follow the posed/animated surface.
+  3. A `rest_position` attribute on the surface + a `surface_uv_coordinate`
+     attribute per strand, so the deform modifier knows where each root
+     is anchored. The interactive Add brush writes surface_uv_coordinate
+     itself; our programmatic Spawn writes it explicitly.
 
 Workflow:
-  1. Active mesh + Setup Hair Brushable — creates a Hair Curves object
-     parented to the mesh with surface binding. Empty by default; the
-     user grows hair by painting density.
-  2. Switch to Hair Sculpt Mode — comb, grow, shrink, density, twist
-     brushes become available natively (Blender 5.x).
-  3. Apply Density Preset — fills the entire surface with strand count
-     calculated from hair_core.strand_count_for(area, preset).
-  4. Convert Hair to Cards — for Unity real-time export: bakes the hair
-     curves to mesh hair-cards UV'd via hair_core.hair_card_uv_layout.
-
-Operators:
-  - PIPESCULPT_OT_hair_setup           : create Hair Curves on active mesh
-  - PIPESCULPT_OT_hair_sculpt_mode     : enter Hair Sculpt mode
-  - PIPESCULPT_OT_hair_apply_preset    : populate density from preset
-  - PIPESCULPT_OT_hair_to_cards        : convert to mesh hair-cards
+  1. Setup Hair — ensures the hair UV + rest_position, creates a native
+     Hair Curves object bound to the surface with the deform modifier.
+  2. Spawn (Preset) — fills the surface with pose-following strands at a
+     real-world density.
+  3. Sculpt / Comb — native brushes (Comb, Add, Density, Grow, Twist).
+  4. → Hair Cards — bake to UV'd quads for real-time Unity export.
 """
 from __future__ import annotations
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty
+from bpy.props import EnumProperty, FloatProperty, IntProperty
 from bpy.types import Operator
 
 from . import hair_core
@@ -33,6 +40,8 @@ from . import hair_core
 
 HAIR_OBJ_SUFFIX = "_Hair"
 HAIR_MARKER_PROP = "pipe_sculpt_hair_source"
+HAIR_UV_NAME = "PipeSculpt_HairUV"
+SURFACE_DEFORM_PREFIX = "Surface Deform"
 
 
 def _active_mesh(context):
@@ -69,47 +78,177 @@ def _mesh_surface_area_m2(mesh_obj) -> float:
     return sum(p.area for p in mesh_obj.data.polygons) * scale_factor * scale_factor
 
 
-def _extract_triangles(context, mesh_obj):
-    """Extract (v0,v1,v2,n0,n1,n2) tuples from the evaluated mesh in local space.
+# ----------------------------------------------------------------------
+# Deform prerequisites — the pieces that make hair follow a posed mesh
+# ----------------------------------------------------------------------
 
-    Uses the depsgraph-evaluated mesh so multires/modifiers are reflected.
-    Vertex normals are used (not face normals) so interpolated growth
-    directions are smooth across the surface. Returns plain float tuples
-    for hair_core (which is bpy-free).
+def _ensure_hair_uv(context, mesh_obj) -> str:
+    """Give the mesh a dedicated non-overlapping UV for hair, return its name.
+
+    Hair sculpt brushes refuse to work on overlapping UV islands. Rather
+    than touch the user's paint/mirror UV, we Smart-UV-Project a separate
+    `PipeSculpt_HairUV` layer and leave the original as the rendered one.
+
+    IMPORTANT: UV-layer references go stale after mesh-editing operators
+    (Blender reallocates CustomData) — we only ever address layers by name
+    or index here, never hold a layer object across an operator.
     """
-    dg = context.evaluated_depsgraph_get()
-    eval_obj = mesh_obj.evaluated_get(dg)
-    mesh = eval_obj.to_mesh()
+    uvs = mesh_obj.data.uv_layers
+    prev_active_index = uvs.active_index if len(uvs) else 0
+    prev_render_index = next((i for i, l in enumerate(uvs) if l.active_render), 0)
+
+    if uvs.get(HAIR_UV_NAME) is None:
+        uvs.new(name=HAIR_UV_NAME, do_init=True)
+    # Address by name every time — the reference from .new()/.get() may be
+    # invalidated by the mode switches and unwrap below.
+    uvs.active_index = uvs.find(HAIR_UV_NAME)
+
+    prev_active = context.view_layer.objects.active
+    prev_mode = context.mode
+    context.view_layer.objects.active = mesh_obj
+    mesh_obj.select_set(True)
+    if context.mode != 'EDIT_MESH':
+        bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_mode(type='FACE')
+    bpy.ops.mesh.select_all(action='SELECT')
     try:
-        mesh.calc_loop_triangles()
-        verts = mesh.vertices
-        triangles = []
-        for lt in mesh.loop_triangles:
-            i0, i1, i2 = lt.vertices
-            v0 = tuple(verts[i0].co)
-            v1 = tuple(verts[i1].co)
-            v2 = tuple(verts[i2].co)
-            n0 = tuple(verts[i0].normal)
-            n1 = tuple(verts[i1].normal)
-            n2 = tuple(verts[i2].normal)
-            triangles.append((v0, v1, v2, n0, n1, n2))
-    finally:
-        eval_obj.to_mesh_clear()
+        bpy.ops.uv.smart_project(
+            angle_limit=66.0,
+            island_margin=0.02,
+            correct_aspect=True,
+            scale_to_bounds=False,
+        )
+    except Exception:
+        # Smart UV Project needs UI context that headless runs lack; a plain
+        # angle-based unwrap is a serviceable fallback there. In the GUI the
+        # smart-project path (guaranteed non-overlap) is what actually runs.
+        bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=0.02)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Keep the user's original UV as the rendered/active-for-paint one.
+    uvs[prev_render_index].active_render = True
+    uvs.active_index = prev_active_index
+
+    # Restore caller's active object (helpers shouldn't leave it dangling).
+    if prev_active is not None:
+        context.view_layer.objects.active = prev_active
+    if prev_mode == 'OBJECT' and context.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    return HAIR_UV_NAME
+
+
+def _ensure_rest_position(mesh_obj) -> None:
+    """Store the surface's undeformed vertex positions as `rest_position`.
+
+    The 'Deform Curves on Surface' modifier compares this rest state against
+    the live posed surface to know how far to carry each hair root. Only
+    created if absent, so re-running never rebinds to a posed state — the
+    mesh's own vertex coords are always the rest pose (armature deform is a
+    modifier, it doesn't move mesh data).
+    """
+    md = mesh_obj.data
+    if "rest_position" in md.attributes:
+        return
+    attr = md.attributes.new("rest_position", 'FLOAT_VECTOR', 'POINT')
+    flat = []
+    for v in md.vertices:
+        flat.extend((v.co.x, v.co.y, v.co.z))
+    attr.data.foreach_set("vector", flat)
+
+
+def _get_surface_deform_node_group(context, mesh_obj):
+    """Return the built-in 'Deform Curves on Surface' node group.
+
+    Blender mints it the first time `curves_empty_hair_add` runs. If none
+    exists yet (healing legacy hair), we mint one via a throwaway empty-hair
+    object and keep it alive with a fake user.
+    """
+    for ng in bpy.data.node_groups:
+        if ng.name.startswith(SURFACE_DEFORM_PREFIX):
+            return ng
+
+    prev_active = context.view_layer.objects.active
+    prev_selected = list(context.selected_objects)
+    if context.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.select_all(action='DESELECT')
+    mesh_obj.select_set(True)
+    context.view_layer.objects.active = mesh_obj
+    bpy.ops.object.curves_empty_hair_add()
+    temp = context.active_object
+    node_group = next(
+        (m.node_group for m in temp.modifiers
+         if m.type == 'NODES' and m.node_group is not None),
+        None,
+    )
+    if node_group is not None:
+        node_group.use_fake_user = True
+    bpy.data.objects.remove(temp, do_unlink=True)
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in prev_selected:
+        try:
+            o.select_set(True)
+        except (ReferenceError, RuntimeError):
+            pass
+    if prev_active is not None:
+        context.view_layer.objects.active = prev_active
+    return node_group
+
+
+def _ensure_surface_deform_modifier(context, hair_obj, mesh_obj):
+    """Guarantee the hair has a 'Deform Curves on Surface' modifier."""
+    for md in hair_obj.modifiers:
+        if (md.type == 'NODES' and md.node_group is not None
+                and md.node_group.name.startswith(SURFACE_DEFORM_PREFIX)):
+            return md
+    node_group = _get_surface_deform_node_group(context, mesh_obj)
+    if node_group is None:
+        return None
+    md = hair_obj.modifiers.new("Surface Deform", 'NODES')
+    md.node_group = node_group
+    return md
+
+
+def _extract_triangles_uv(mesh_obj, uv_name):
+    """Extract (v0,v1,v2,n0,n1,n2,uv0,uv1,uv2) tuples from the ORIGINAL mesh.
+
+    Sampled from mesh.data (not the evaluated mesh) so root positions and
+    UVs line up with `rest_position` — the frame the deform modifier binds
+    against. Vertex normals give smooth growth directions. Plain tuples for
+    hair_core, which is bpy-free.
+    """
+    md = mesh_obj.data
+    md.calc_loop_triangles()
+    uv_layer = md.uv_layers.get(uv_name)
+    if uv_layer is None:
+        return []
+    uv_data = uv_layer.data
+    verts = md.vertices
+    triangles = []
+    for lt in md.loop_triangles:
+        i0, i1, i2 = lt.vertices
+        l0, l1, l2 = lt.loops
+        triangles.append((
+            tuple(verts[i0].co), tuple(verts[i1].co), tuple(verts[i2].co),
+            tuple(verts[i0].normal), tuple(verts[i1].normal), tuple(verts[i2].normal),
+            tuple(uv_data[l0].uv), tuple(uv_data[l1].uv), tuple(uv_data[l2].uv),
+        ))
     return triangles
 
 
-def _build_curves_from_strands(curves_data, strands) -> bool:
+def _build_curves_from_strands(curves_data, strands, root_uvs=None) -> bool:
     """Populate a Curves datablock from hair_core strand point-lists.
 
-    strands: list of strands, each a list of (x,y,z) point tuples.
-    Returns True on success. Wrapped defensively because the exact
-    Curves population API (add_curves / foreach_set) is version-sensitive
-    and worth failing loud on rather than silently producing empty hair.
+    strands:   list of strands, each a list of (x,y,z) point tuples.
+    root_uvs:  optional per-strand (u,v) root UVs. When supplied (and all
+               present), written into the CURVE-domain `surface_uv_coordinate`
+               attribute so the deform modifier makes the strands follow pose.
+    Returns True on success. Wrapped defensively because the exact Curves
+    population API is version-sensitive and worth failing loud on rather than
+    silently producing empty hair.
     """
-    # Clear any existing curves first. remove_curves() with NO arguments
-    # clears every curve in Blender 5.1 — verified in the API audit. Passing
-    # None (positional or indices=None) raises; an explicit index list also
-    # works but no-args is the cleanest "remove all".
+    # remove_curves() with NO arguments clears every curve in Blender 5.1.
     if len(curves_data.curves) > 0:
         curves_data.remove_curves()
 
@@ -117,18 +256,29 @@ def _build_curves_from_strands(curves_data, strands) -> bool:
     if not sizes:
         return False
 
-    # add_curves(sizes) appends curves with the given per-curve point counts
     curves_data.add_curves(sizes)
 
-    # Flatten all point positions into one array for foreach_set
     flat = []
     for strand in strands:
         for p in strand:
             flat.extend((p[0], p[1], p[2]))
-
     if len(curves_data.points) * 3 != len(flat):
         return False
     curves_data.points.foreach_set("position", flat)
+
+    if (root_uvs is not None
+            and len(root_uvs) == len(strands)
+            and all(uv is not None for uv in root_uvs)):
+        attr = curves_data.attributes.get("surface_uv_coordinate")
+        if attr is None:
+            attr = curves_data.attributes.new(
+                "surface_uv_coordinate", 'FLOAT2', 'CURVE')
+        uv_flat = []
+        for uv in root_uvs:
+            uv_flat.extend((uv[0], uv[1]))
+        if len(attr.data) * 2 == len(uv_flat):
+            attr.data.foreach_set("vector", uv_flat)
+
     curves_data.update_tag()
     return True
 
@@ -137,9 +287,10 @@ class PIPESCULPT_OT_hair_setup(Operator):
     bl_idname = "pipe_sculpt.hair_setup"
     bl_label = "Setup Hair (Brushable)"
     bl_description = (
-        "Create an empty Hair Curves object bound to the active mesh's "
-        "surface. Switch to Hair Sculpt Mode and paint density with the "
-        "native brushes (Comb, Grow, Add, Density, Twist)"
+        "Create a Hair Curves object bound to the active mesh's surface, "
+        "set up to FOLLOW POSE/ANIMATION. Gives hair its own non-overlapping "
+        "UV (so the sculpt brushes don't error) without touching your paint "
+        "UV. Then Spawn a preset or enter Hair Sculpt Mode to brush density"
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -152,38 +303,68 @@ class PIPESCULPT_OT_hair_setup(Operator):
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Idempotency: if hair already exists for this mesh, just select + report.
         existing = _find_hair_for_mesh(mesh_obj)
         if existing is not None:
-            bpy.ops.object.select_all(action='DESELECT')
-            existing.select_set(True)
-            context.view_layer.objects.active = existing
-            self.report({'INFO'}, f"Hair already exists ('{existing.name}') — selected it")
-            return {'FINISHED'}
+            # Heal hair from older sessions (no deform modifier / parent / UV)
+            # in place if it has painted curves; recreate cleanly if empty.
+            if len(existing.data.curves) == 0:
+                bpy.data.objects.remove(existing, do_unlink=True)
+            else:
+                self._wire_deform(context, existing, mesh_obj)
+                bpy.ops.object.select_all(action='DESELECT')
+                existing.select_set(True)
+                context.view_layer.objects.active = existing
+                self.report(
+                    {'INFO'},
+                    f"Upgraded '{existing.name}' — it now follows pose. "
+                    "Re-pose to check",
+                )
+                return {'FINISHED'}
 
-        # Create empty Hair Curves dataset + object
-        curves_data = bpy.data.hair_curves.new(f"{mesh_obj.name}{HAIR_OBJ_SUFFIX}")
-        hair_obj = bpy.data.objects.new(f"{mesh_obj.name}{HAIR_OBJ_SUFFIX}", curves_data)
-        hair_obj[HAIR_MARKER_PROP] = mesh_obj.name
-        context.collection.objects.link(hair_obj)
-        hair_obj.matrix_world = mesh_obj.matrix_world.copy()
+        # Fresh setup: hair UV + rest_position, then native empty-hair (which
+        # brings the deform modifier + parent for free).
+        hair_uv = _ensure_hair_uv(context, mesh_obj)
+        _ensure_rest_position(mesh_obj)
 
-        # Bind hair to the mesh surface so growing/deformation follow
-        curves_data.surface = mesh_obj
-        if mesh_obj.data.uv_layers.active is not None:
-            curves_data.surface_uv_map = mesh_obj.data.uv_layers.active.name
-
-        # Make hair the active object, ready for the user to enter sculpt mode
         bpy.ops.object.select_all(action='DESELECT')
-        hair_obj.select_set(True)
-        context.view_layer.objects.active = hair_obj
+        mesh_obj.select_set(True)
+        context.view_layer.objects.active = mesh_obj
+        try:
+            bpy.ops.object.curves_empty_hair_add()
+        except RuntimeError as e:
+            self.report({'ERROR'}, f"Couldn't create hair curves: {e}")
+            return {'CANCELLED'}
 
+        hair_obj = context.active_object
+        hair_obj.name = f"{mesh_obj.name}{HAIR_OBJ_SUFFIX}"
+        hair_obj.data.name = hair_obj.name
+        hair_obj[HAIR_MARKER_PROP] = mesh_obj.name
+        hair_obj.data.surface = mesh_obj
+        hair_obj.data.surface_uv_map = hair_uv
+        _ensure_surface_deform_modifier(context, hair_obj, mesh_obj)
+
+        has_deform = any(mesh_obj.modifiers)
+        follow = ("It will follow pose/animation" if has_deform
+                  else "Generate a Rig, then it will follow pose")
         self.report(
             {'INFO'},
-            f"Hair object '{hair_obj.name}' created — bound to '{mesh_obj.name}'. "
-            "Click 'Hair Sculpt Mode' to start brushing",
+            f"Hair '{hair_obj.name}' created on '{mesh_obj.name}'. {follow}. "
+            "Now click 'Spawn (Preset)' or 'Hair Sculpt Mode'",
         )
         return {'FINISHED'}
+
+    @staticmethod
+    def _wire_deform(context, hair_obj, mesh_obj):
+        """Bring a legacy hair object up to the pose-following standard."""
+        if hair_obj.data.surface is None:
+            hair_obj.data.surface = mesh_obj
+        if not hair_obj.data.surface_uv_map:
+            hair_obj.data.surface_uv_map = _ensure_hair_uv(context, mesh_obj)
+        _ensure_rest_position(mesh_obj)
+        if hair_obj.parent is None:
+            hair_obj.parent = mesh_obj
+            hair_obj.matrix_parent_inverse = mesh_obj.matrix_world.inverted()
+        _ensure_surface_deform_modifier(context, hair_obj, mesh_obj)
 
 
 class PIPESCULPT_OT_hair_sculpt_mode(Operator):
@@ -227,10 +408,10 @@ class PIPESCULPT_OT_hair_apply_preset(Operator):
     bl_idname = "pipe_sculpt.hair_apply_preset"
     bl_label = "Spawn Hair (Preset)"
     bl_description = (
-        "Spawn hair strands across the entire surface at the chosen preset's "
-        "real-world density. Strands are placed area-weighted (uniform over "
-        "the surface) and grow along the mesh normals. Refine afterwards with "
-        "the Hair Sculpt brushes"
+        "Spawn hair strands across the whole surface at the preset's real-world "
+        "density. Strands are area-weighted, grow along the mesh normals, and "
+        "are bound to the surface so they FOLLOW POSE/ANIMATION. Refine "
+        "afterwards with the Hair Sculpt brushes"
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -284,7 +465,6 @@ class PIPESCULPT_OT_hair_apply_preset(Operator):
         strand_count = hair_core.select_density_for_painted_area(
             area, preset, self.density_multiplier
         )
-        # Apply the user's hard cap
         if strand_count > self.max_strands:
             self.report(
                 {'WARNING'},
@@ -305,26 +485,37 @@ class PIPESCULPT_OT_hair_apply_preset(Operator):
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Extract triangle data (evaluated mesh) and run the pure-Python spawn
-        triangles = _extract_triangles(context, mesh_obj)
+        # Ensure the deform prerequisites so spawned hair follows pose even if
+        # the hair object predates this version.
+        uv_name = hair_obj.data.surface_uv_map
+        if not uv_name or mesh_obj.data.uv_layers.get(uv_name) is None:
+            uv_name = _ensure_hair_uv(context, mesh_obj)
+            hair_obj.data.surface_uv_map = uv_name
+        _ensure_rest_position(mesh_obj)
+        context.view_layer.objects.active = hair_obj
+        _ensure_surface_deform_modifier(context, hair_obj, mesh_obj)
+
+        triangles = _extract_triangles_uv(mesh_obj, uv_name)
         if not triangles:
-            self.report({'ERROR'}, "Surface mesh has no faces to grow hair on")
+            self.report(
+                {'ERROR'},
+                "Couldn't read the hair UV — try 'Setup Hair' again",
+            )
             return {'CANCELLED'}
 
         scale_factor = (mesh_obj.scale.x * mesh_obj.scale.y * mesh_obj.scale.z) ** (1.0 / 3.0)
         rng = random.Random(self.seed)
-        strands = hair_core.build_strands_geometry(
+        strands, root_uvs = hair_core.build_strands_with_uv(
             triangles, strand_count, preset, rng, mesh_scale=scale_factor,
         )
 
-        # Build the curves geometry from the strand point-lists
         try:
-            ok = _build_curves_from_strands(hair_obj.data, strands)
+            ok = _build_curves_from_strands(hair_obj.data, strands, root_uvs)
         except Exception as e:
             self.report(
                 {'ERROR'},
-                f"Curves population failed ({e}). The Blender 5.x Curves API "
-                "may differ — report this so we can fix _build_curves_from_strands",
+                f"Curves population failed ({e}). Report this so we can fix "
+                "_build_curves_from_strands",
             )
             return {'CANCELLED'}
 
@@ -332,10 +523,11 @@ class PIPESCULPT_OT_hair_apply_preset(Operator):
             self.report({'ERROR'}, "Curves population produced no geometry")
             return {'CANCELLED'}
 
+        context.view_layer.objects.active = hair_obj
         self.report(
             {'INFO'},
             f"Spawned {len(strands):,} '{preset.label}' strands on '{mesh_obj.name}' "
-            f"({area:.3f} m²). Enter Hair Sculpt Mode to comb / refine",
+            f"({area:.3f} m²) — bound to follow pose. Enter Hair Sculpt Mode to refine",
         )
         return {'FINISHED'}
 
@@ -377,9 +569,8 @@ class PIPESCULPT_OT_hair_to_cards(Operator):
             return {'CANCELLED'}
 
         # Use Blender's built-in 'convert' on hair curves to convert them to
-        # a mesh. UV-assigning from `layout` is a TODO for v0.12.0 — for now
-        # the convert works and the user can run our existing Smart Unwrap
-        # afterwards as a fallback.
+        # a mesh. UV-assigning from `layout` is a TODO for a later version —
+        # for now the convert works and the user can run Smart Unwrap after.
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -389,7 +580,6 @@ class PIPESCULPT_OT_hair_to_cards(Operator):
             self.report({'ERROR'}, f"Hair→mesh convert failed: {e}")
             return {'CANCELLED'}
 
-        # Rename converted object
         result = context.active_object
         result.name = f"{hair_obj.name}_Cards"
 

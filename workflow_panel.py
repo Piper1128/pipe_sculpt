@@ -89,10 +89,35 @@ class PIPESCULPT_PT_workflow(Panel):
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.label(text="Hair & Fur", icon='CURVES_DATA')
-        col.operator("pipe_sculpt.hair_setup", text="1. Setup Hair", icon='OUTLINER_OB_CURVES')
-        col.operator("pipe_sculpt.hair_apply_preset", text="2. Spawn (Preset)", icon='PARTICLE_POINT')
-        col.operator("pipe_sculpt.hair_sculpt_mode", text="3. Sculpt / Comb", icon='BRUSH_DATA')
-        col.operator("pipe_sculpt.hair_to_cards", text="4. → Hair Cards", icon='MESH_PLANE')
+        is_hair = obj is not None and obj.type == 'CURVES'
+        if is_hair:
+            # Working on a hair object — surface it does / doesn't follow pose.
+            follows = any(
+                m.type == 'NODES' and m.node_group is not None
+                and m.node_group.name.startswith("Surface Deform")
+                for m in obj.modifiers
+            )
+            bound = obj.data.surface is not None
+            info = col.box().column(align=True)
+            info.scale_y = 0.7
+            if follows and bound:
+                info.label(text="Follows pose ✓", icon='CHECKMARK')
+            else:
+                info.label(text="Not bound — run Setup Hair", icon='ERROR')
+            col.operator("pipe_sculpt.hair_apply_preset", text="Spawn (Preset)", icon='PARTICLE_POINT')
+            col.operator("pipe_sculpt.hair_sculpt_mode", text="Sculpt / Comb", icon='BRUSH_DATA')
+            col.operator("pipe_sculpt.hair_to_cards", text="→ Hair Cards", icon='MESH_PLANE')
+            col.separator()
+            col.operator("pipe_sculpt.hair_setup", text="Re-run Setup (heal)", icon='FILE_REFRESH')
+        else:
+            # On a mesh (or nothing) — guide toward the first step.
+            hint = col.box().column(align=True)
+            hint.scale_y = 0.7
+            hint.label(text="Select the body, then:", icon='INFO')
+            col.operator("pipe_sculpt.hair_setup", text="1. Setup Hair", icon='OUTLINER_OB_CURVES')
+            col.operator("pipe_sculpt.hair_apply_preset", text="2. Spawn (Preset)", icon='PARTICLE_POINT')
+            col.operator("pipe_sculpt.hair_sculpt_mode", text="3. Sculpt / Comb", icon='BRUSH_DATA')
+            col.operator("pipe_sculpt.hair_to_cards", text="4. → Hair Cards", icon='MESH_PLANE')
 
         layout.separator()
         col = layout.column(align=True)

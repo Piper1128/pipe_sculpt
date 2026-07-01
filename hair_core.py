@@ -277,9 +277,17 @@ def triangle_area(v0: Vec3, v1: Vec3, v2: Vec3) -> float:
 
 @dataclass(frozen=True)
 class SampledStrand:
-    """One spawned strand: a root position on the surface + growth normal."""
+    """One spawned strand: a root position on the surface + growth normal.
+
+    `uv` is the interpolated surface UV coordinate at the root (a 2-tuple),
+    or None when the source triangles carry no UV data. The bpy wrapper
+    writes it into the Curves' `surface_uv_coordinate` attribute so the
+    'Deform Curves on Surface' modifier can make the strand follow the
+    posed/animated mesh. Without a UV the strand is placed but static.
+    """
     root: Vec3
     normal: Vec3
+    uv: tuple | None = None
 
 
 def build_area_cdf(tri_areas: Sequence[float]) -> list[float]:
@@ -331,15 +339,27 @@ def _bary_interp(a: Vec3, b: Vec3, c: Vec3, w: tuple[float, float, float]) -> Ve
     return _add(_add(_scale(a, w[0]), _scale(b, w[1])), _scale(c, w[2]))
 
 
+def _bary_interp2(a, b, c, w: tuple[float, float, float]) -> tuple[float, float]:
+    """Barycentric-interpolate three 2D UV corners. Plain tuples, bpy-free."""
+    return (
+        a[0] * w[0] + b[0] * w[1] + c[0] * w[2],
+        a[1] * w[0] + b[1] * w[1] + c[1] * w[2],
+    )
+
+
 def sample_surface_strands(triangles: Sequence, count: int, rng) -> list[SampledStrand]:
     """Sample `count` strand roots over the triangulated surface.
 
     triangles: sequence of (v0, v1, v2, n0, n1, n2) where v* are corner
-               positions and n* are corner normals (all Vec3 tuples).
+               positions and n* are corner normals (all Vec3 tuples). An
+               optional (uv0, uv1, uv2) — three 2-tuples — may follow, in
+               which case the strand's root UV is interpolated too (needed
+               for pose-following hair).
     rng:       a random.Random-like object exposing .random() → [0,1).
 
     Returns a list of SampledStrand (root position + interpolated, normalised
-    growth normal). Area-weighted so strands cover the surface uniformly.
+    growth normal + optional root UV). Area-weighted so strands cover the
+    surface uniformly.
     """
     if count <= 0 or not triangles:
         return []
@@ -358,7 +378,8 @@ def sample_surface_strands(triangles: Sequence, count: int, rng) -> list[Sampled
         w = sample_barycentric(rng.random(), rng.random())
         root = _bary_interp(t[0], t[1], t[2], w)
         normal = _normalize(_bary_interp(t[3], t[4], t[5], w))
-        strands.append(SampledStrand(root, normal))
+        uv = _bary_interp2(t[6], t[7], t[8], w) if len(t) >= 9 else None
+        strands.append(SampledStrand(root, normal, uv))
     return strands
 
 
@@ -418,3 +439,32 @@ def build_strands_geometry(
         strand_polyline(s.root, s.normal, length, preset.segments, jitter, rng)
         for s in sampled
     ]
+
+
+def build_strands_with_uv(
+    triangles: Sequence,
+    count: int,
+    preset: HairPreset,
+    rng,
+    mesh_scale: float = 1.0,
+) -> tuple[list[list[Vec3]], list]:
+    """Like build_strands_geometry, but also return each strand's root UV.
+
+    Returns (strands, root_uvs) where root_uvs[i] is the (u, v) tuple (or
+    None) for strands[i]. The bpy wrapper writes root_uvs into the Curves'
+    `surface_uv_coordinate` attribute so the 'Deform Curves on Surface'
+    modifier binds each strand to the mesh and it follows pose/animation.
+
+    Consumes `rng` in the exact same order as build_strands_geometry (all
+    sampling first, then per-strand jitter) so a given seed is stable across
+    both entry points.
+    """
+    sampled = sample_surface_strands(triangles, count, rng)
+    jitter = 0.4 if preset.use_jitter else 0.0
+    length = preset.strand_length * max(mesh_scale, 0.0001)
+    strands = [
+        strand_polyline(s.root, s.normal, length, preset.segments, jitter, rng)
+        for s in sampled
+    ]
+    root_uvs = [s.uv for s in sampled]
+    return strands, root_uvs

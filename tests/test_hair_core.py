@@ -32,6 +32,22 @@ def _unit_quad_triangles():
     ]
 
 
+# Same quad, but with per-corner UVs matching the XY position (u=x, v=y).
+# A root at (x, y, 0) should therefore interpolate to UV (x, y) — easy to
+# assert against for the pose-follow attribute path.
+def _unit_quad_triangles_uv():
+    v00 = (0.0, 0.0, 0.0)
+    v10 = (1.0, 0.0, 0.0)
+    v11 = (1.0, 1.0, 0.0)
+    v01 = (0.0, 1.0, 0.0)
+    up = (0.0, 0.0, 1.0)
+    uv00, uv10, uv11, uv01 = (0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)
+    return [
+        (v00, v10, v11, up, up, up, uv00, uv10, uv11),
+        (v00, v11, v01, up, up, up, uv00, uv11, uv01),
+    ]
+
+
 class TestPresets:
     def test_six_presets_shipped(self):
         assert len(hc.HAIR_PRESETS) == 6
@@ -351,3 +367,62 @@ class TestBuildStrandsGeometry:
             r, t = strand[0], strand[-1]
             return hc._length(hc._sub(t, r))
         assert tip_dist(scaled[0]) == pytest.approx(tip_dist(normal[0]) * 2.0)
+
+
+class TestSurfaceUV:
+    """The root-UV path that makes spawned hair follow pose."""
+
+    def test_bary_interp2_corner(self):
+        # Full weight on the first corner returns that corner's UV
+        assert hc._bary_interp2((0.2, 0.8), (0, 0), (0, 0), (1.0, 0.0, 0.0)) == \
+            pytest.approx((0.2, 0.8))
+
+    def test_bary_interp2_midpoint(self):
+        got = hc._bary_interp2((0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (0.0, 0.5, 0.5))
+        assert got == pytest.approx((0.5, 0.5))
+
+    def test_sampled_strand_uv_defaults_none(self):
+        # Old 6-tuple triangles (no UV) leave the strand UV as None
+        strands = hc.sample_surface_strands(_unit_quad_triangles(), 20, random.Random(1))
+        assert all(s.uv is None for s in strands)
+
+    def test_sampled_strand_uv_present_with_uv_triangles(self):
+        strands = hc.sample_surface_strands(_unit_quad_triangles_uv(), 50, random.Random(1))
+        assert all(s.uv is not None for s in strands)
+
+    def test_root_uv_matches_root_xy(self):
+        # Our test quad has UV == XY, so each root's UV should equal its (x, y)
+        strands = hc.sample_surface_strands(_unit_quad_triangles_uv(), 100, random.Random(7))
+        for s in strands:
+            assert s.uv[0] == pytest.approx(s.root[0], abs=1e-6)
+            assert s.uv[1] == pytest.approx(s.root[1], abs=1e-6)
+
+    def test_uv_in_unit_square(self):
+        strands = hc.sample_surface_strands(_unit_quad_triangles_uv(), 200, random.Random(2))
+        for s in strands:
+            assert 0.0 <= s.uv[0] <= 1.0
+            assert 0.0 <= s.uv[1] <= 1.0
+
+    def test_build_with_uv_returns_pair(self):
+        tris = _unit_quad_triangles_uv()
+        preset = hc.get_preset('FUR_SHORT')
+        strands, root_uvs = hc.build_strands_with_uv(tris, 60, preset, random.Random(3))
+        assert len(strands) == 60
+        assert len(root_uvs) == 60
+        assert all(uv is not None for uv in root_uvs)
+
+    def test_build_with_uv_none_without_uv_triangles(self):
+        tris = _unit_quad_triangles()  # no UVs
+        preset = hc.get_preset('FUR_SHORT')
+        strands, root_uvs = hc.build_strands_with_uv(tris, 30, preset, random.Random(3))
+        assert len(strands) == 30
+        assert all(uv is None for uv in root_uvs)
+
+    def test_build_with_uv_matches_geometry_rng_order(self):
+        # Same seed → build_strands_with_uv and build_strands_geometry must
+        # produce identical strand geometry (rng consumed in the same order).
+        tris = _unit_quad_triangles_uv()
+        preset = hc.get_preset('SCALP')
+        geo = hc.build_strands_geometry(tris, 40, preset, random.Random(11))
+        strands, _ = hc.build_strands_with_uv(tris, 40, preset, random.Random(11))
+        assert strands == geo

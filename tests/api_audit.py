@@ -137,14 +137,34 @@ check("validate_unity (on rigged mesh)", _validate_rigged)
 
 def _hair_spawn_and_respawn():
     bpy.ops.mesh.primitive_uv_sphere_add(location=(5, 0, 0))
+    mesh = bpy.context.active_object
     bpy.ops.pipe_sculpt.uv_smart_unwrap()
+    paint_uv = next(l.name for l in mesh.data.uv_layers if l.active_render)
     bpy.ops.pipe_sculpt.hair_setup()
+    hair = bpy.context.active_object
+    assert hair.type == 'CURVES', "hair_setup should leave a Curves object active"
+    # Pose-follow prerequisites: surface bind + Deform-Curves-on-Surface + parent
+    assert hair.data.surface is mesh, "hair not bound to surface"
+    assert any(m.type == 'NODES' and m.node_group is not None
+               and m.node_group.name.startswith("Surface Deform")
+               for m in hair.modifiers), "missing Surface Deform modifier"
+    assert hair.parent is mesh, "hair not parented to surface"
+    assert "rest_position" in mesh.data.attributes, "surface missing rest_position"
+    assert hair.data.surface_uv_map == "PipeSculpt_HairUV", "hair not on its own UV"
+    # The user's paint UV must remain the rendered one (untouched by hair setup)
+    assert next(l.name for l in mesh.data.uv_layers if l.active_render) == paint_uv, \
+        "hair setup clobbered the paint UV"
+
     bpy.ops.pipe_sculpt.hair_apply_preset('EXEC_DEFAULT', preset='FUR_SHORT', max_strands=2000, seed=1)
+    assert "surface_uv_coordinate" in hair.data.attributes, \
+        "spawned hair missing surface_uv_coordinate (won't follow pose)"
     # Re-spawn hits remove_curves() — the path the keyword bug lived in
     bpy.ops.pipe_sculpt.hair_apply_preset('EXEC_DEFAULT', preset='FUR_SHORT', max_strands=1500, seed=2)
+    assert "surface_uv_coordinate" in hair.data.attributes, \
+        "re-spawn dropped surface_uv_coordinate"
 
 
-check("hair_setup + spawn + RE-spawn (native curves)", _hair_spawn_and_respawn)
+check("hair_setup + spawn + RE-spawn (pose-follow structure)", _hair_spawn_and_respawn)
 
 
 def _fbx_export():
