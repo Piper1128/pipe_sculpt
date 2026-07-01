@@ -776,6 +776,11 @@ class PIPESCULPT_OT_generate_rig(Operator):
                 ik.pole_subtarget = spec["pole"]
                 ik.chain_count = spec["chain"]
                 ik.pole_angle = pole_angle
+                # Rigid bones: WITHOUT this the IK stretches the limb to reach
+                # the target instead of bending the elbow/knee, so dragging
+                # hand_ik just telescopes the arm rather than bending it. Off =
+                # the joint bends toward the pole, which is what posing needs.
+                ik.use_stretch = False
             bpy.ops.object.mode_set(mode='OBJECT')
 
         bpy.ops.object.select_all(action='DESELECT')

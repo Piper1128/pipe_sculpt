@@ -40,3 +40,5 @@ _load_module_by_path('setup_core', 'setup_core.py')
 # pose_library_core does `import anim_core` as a fallback — anim_core must be
 # loaded first (above) so that resolves to the already-loaded top-level module.
 _load_module_by_path('pose_library_core', 'pose_library_core.py')
+# pose_io_core imports pose_library_core (loaded above).
+_load_module_by_path('pose_io_core', 'pose_io_core.py')

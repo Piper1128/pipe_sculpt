@@ -263,6 +263,56 @@ def _pose_library():
 check("pose library (apply / mirror / insert-at-frame)", _pose_library)
 
 
+def _pose_save_load_delete():
+    import tempfile
+    import glob
+    from pipe_sculpt import pose_library_ops as plo
+    tmp = os.path.join(tempfile.gettempdir(), "_audit_poses")
+    os.makedirs(tmp, exist_ok=True)
+    for f in glob.glob(os.path.join(tmp, "*.json")):
+        os.remove(f)
+    orig = plo._user_pose_dir
+    plo._user_pose_dir = lambda context, create=False: tmp
+    try:
+        bpy.ops.pipe_sculpt.starter_humanoid()
+        bpy.ops.pipe_sculpt.generate_rig()
+        arm = bpy.context.active_object
+        bpy.context.view_layer.objects.active = arm
+        bpy.ops.object.mode_set(mode='POSE')
+        # Hand-pose a control, save it, verify it round-trips through disk.
+        import mathutils
+        hik = arm.pose.bones['hand_ik.L']
+        mat = hik.matrix.copy(); mat.translation = mathutils.Vector((0.5, 0.1, 0.7))
+        hik.matrix = mat
+        bpy.context.view_layer.update()
+        posed = tuple(round(v, 4) for v in arm.pose.bones['hand_ik.L'].location)
+
+        bpy.ops.pipe_sculpt.pose_save('EXEC_DEFAULT', pose_name='Audit Pose')
+        assert glob.glob(os.path.join(tmp, "*.json")), "pose_save wrote no file"
+        assert 'AUDIT_POSE' in plo.USER_POSES, "saved pose not in registry"
+
+        for pb in arm.pose.bones:
+            pb.location = (0, 0, 0); pb.rotation_quaternion = (1, 0, 0, 0)
+        bpy.context.view_layer.update()
+        s = bpy.context.scene.pipe_sculpt_pose_library
+        s.pose = 'AUDIT_POSE'; s.mirror = False; s.influence = 1.0; s.selected_only = False
+        bpy.ops.pipe_sculpt.pose_apply()
+        applied = tuple(round(v, 4) for v in arm.pose.bones['hand_ik.L'].location)
+        assert applied == posed, f"round-trip mismatch {applied} != {posed}"
+
+        s.pose = 'AUDIT_POSE'
+        bpy.ops.pipe_sculpt.pose_delete()
+        assert 'AUDIT_POSE' not in plo.USER_POSES, "delete didn't clear registry"
+        assert not glob.glob(os.path.join(tmp, "*.json")), "delete left the file"
+        bpy.ops.object.mode_set(mode='OBJECT')
+    finally:
+        plo._user_pose_dir = orig
+        plo._load_user_poses(bpy.context)
+
+
+check("pose save / load / delete (user pose round-trip)", _pose_save_load_delete)
+
+
 def _anim_keying_loop_breakdown():
     # Keys two frames, then exercises the slotted-action fcurve path:
     # key rig, make cyclic, validate loop, toggle interp, breakdown (exec).

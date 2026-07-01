@@ -602,7 +602,7 @@
    "name": "WALK_CONTACT_L",
    "label": "Walk \u2014 Contact (L Fwd)",
    "category": "Locomotion",
-   "description": "Stride contact key: LEFT foot heel-strikes forward (0.944, trimmed from 0.983 by adding a small heel lift), RIGHT foot at toe-off behind (0.939). Opposite-arm swing \u2014 L arm back, R arm forward. Pelvis twists toward the trailing leg, ribcage counter-rotates. Asymmetric contact \u2014 both sides given; mirror it in time for the R-contact key.",
+   "description": "Stride contact key: LEFT foot heel-strikes forward (longer, trimmed from 0.983 by adding a small heel lift), RIGHT foot at toe-off behind (0.939). Opposite-arm swing \u2014 L arm back, R arm forward. Pelvis twists toward the trailing leg, ribcage counter-rotates. Asymmetric contact \u2014 both sides given; mirror it in time for the R-contact key. [stride lengthened + slight body dip so the planted foot reaches]",
    "symmetric": false,
    "fk": [
     {
@@ -659,8 +659,8 @@
      "bone": "foot_ik.L",
      "offset": [
       0,
-      0.22,
-      0.05
+      0.34,
+      0.07
      ]
     },
     {
@@ -691,8 +691,8 @@
      "bone": "foot_ik.R",
      "offset": [
       0,
-      -0.24,
-      0.06
+      -0.32,
+      0.11
      ]
     },
     {
@@ -717,6 +717,14 @@
       -0.04,
       -0.06,
       0
+     ]
+    },
+    {
+     "bone": "root",
+     "offset": [
+      0,
+      0,
+      -0.05
      ]
     }
    ]
@@ -816,7 +824,7 @@
    "name": "RUN_CONTACT_L",
    "label": "Run \u2014 Contact / Drive (L Fwd)",
    "category": "Locomotion",
-   "description": "Aggressive run stride: LEFT foot strikes under the mass near CoM (short forward reach, 0.926), RIGHT leg drives fully back with heel high (0.825), torso pitched forward, arms pumping bent ~90 opposite the legs (hands rise toward chest/hip). Root compresses 0.10 at contact. Asymmetric \u2014 both sides given; mirror in time for R-contact.",
+   "description": "Aggressive run stride: LEFT foot strikes under the mass near CoM (short forward reach, 0.926), RIGHT leg drives fully back with heel high (0.825), torso pitched forward, arms pumping bent ~90 opposite the legs (hands rise toward chest/hip). Root compresses 0.10 at contact. Asymmetric \u2014 both sides given; mirror in time for R-contact. [stride lengthened + deeper compression]",
    "symmetric": false,
    "fk": [
     {
@@ -866,15 +874,15 @@
      "offset": [
       0,
       0,
-      -0.1
+      -0.15
      ]
     },
     {
      "bone": "foot_ik.L",
      "offset": [
       0,
-      0.12,
-      0.05
+      0.3,
+      0.11
      ]
     },
     {
@@ -905,7 +913,7 @@
      "bone": "foot_ik.R",
      "offset": [
       0,
-      -0.3,
+      -0.5,
       0.2
      ]
     },

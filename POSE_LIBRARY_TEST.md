@@ -1,8 +1,20 @@
-# Pose Library — test checklist (v0.22.0)
+# Pose Library — test checklist (v0.23.0)
 
 Programmatic standard poses you can **apply** to the rig or **insert as
-keyframes** into chosen frames — the answer to "can we make std poses and drop
-them into frames?".
+keyframes** into chosen frames — plus **save your own** poses to disk.
+
+## New in v0.23.0
+- **Save your own poses** — pose the rig by hand, click **Save Current Pose**,
+  give it a name. It's written as a `.json` asset (like a Unity
+  ScriptableObject) and shows up in the list under **★**. Re-save the same name
+  to update it (pose → tweak → re-save). Trash icon deletes a ★ pose.
+  Folder is set in Preferences ▸ Add-ons ▸ PipeSculpt ▸ *User Pose Folder*
+  (empty = Blender's config folder).
+- **Elbow now bends when you drag** — the IK was set to *stretch* (so dragging
+  the hand telescoped the arm instead of bending it). Fixed to rigid bones.
+  **⚠ Re-run Generate Rig** to get the fix on an existing character.
+- **Longer strides** on Walk/Run contact (with a small body-dip so the planted
+  foot still reaches).
 
 ## What it is
 - 18 curated poses in three groups — **Stance**, **Locomotion**, **Action**.
@@ -43,6 +55,25 @@ Pose Mode on the armature → **PipeSculpt ▸ Pose Library** panel.
 4. Pick **Victory / Cheer** ▸ **Insert at Frame** (keys frame 17…).
 5. Play back — the character animates through the three poses.
    - ✅ each pose is a full keyframe; the timeline blends between them.
+
+## Test C — save your own pose (the SO-like bit)
+1. **Re-run Generate Rig** (to get the elbow fix), Style Controls, Pose Mode.
+2. Pose the rig by hand — grab a **coloured cube** (hand_ik) and move it; the
+   elbow now **bends** instead of the arm stretching. To aim the elbow which
+   way it points, grab the **diamond** (elbow_pole).
+3. **Save Current Pose** → name it "My Idle" → it appears under **★ My Idle**.
+4. Move to a fresh frame, reset, then pick **★ My Idle** ▸ **Apply** — your
+   pose comes back exactly.
+5. Tweak it, **Save Current Pose** with the *same name* → it updates the file.
+6. The 🗑 next to Save deletes the selected ★ pose.
+
+### Bending the elbow when you drag (quick how-to)
+- Grab **hand_ik** (cube) and pull it **toward the body** → the elbow bends.
+  Moving the hand around at full arm's length keeps the arm straight — that's
+  correct IK; the bend appears when the hand comes closer than the arm's reach.
+- Grab **elbow_pole** (diamond) to point the elbow a specific direction.
+- If dragging still felt like the arm *stretched* — you're on an old rig;
+  re-run **Generate Rig**.
 
 ## The 18 poses
 - **Stance**: T-Pose · A-Pose · Relaxed Idle · Contrapposto · Power Stance

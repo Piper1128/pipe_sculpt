@@ -140,6 +140,18 @@ class PIPESCULPT_Preferences(AddonPreferences):
         default=True,
     )
 
+    # Pose library
+    user_pose_dir: StringProperty(
+        name="User Pose Folder",
+        description=(
+            "Folder where your saved poses live (one .json per pose, like a "
+            "Unity ScriptableObject asset). Leave empty to use Blender's config "
+            "folder. Point it at a project folder to share poses between files"
+        ),
+        subtype='DIR_PATH',
+        default="",
+    )
+
     def draw(self, context):
         layout = self.layout
 
@@ -163,6 +175,10 @@ class PIPESCULPT_Preferences(AddonPreferences):
         col.prop(self, "export_axis_mode")
         col.prop(self, "export_triangulate")
         col.prop(self, "export_apply_modifiers")
+
+        box = layout.box()
+        box.label(text="Pose Library", icon='ARMATURE_DATA')
+        box.prop(self, "user_pose_dir")
 
         box = layout.box()
         header = box.row(align=True)
