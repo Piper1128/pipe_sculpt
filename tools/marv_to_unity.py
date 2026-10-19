@@ -108,12 +108,18 @@ def _run(args, report):
 
     t0 = time.perf_counter()
 
-    def step(name, result):
-        report["steps"].append({"step": name, "result": sorted(result),
-                                "t_s": round(time.perf_counter() - t0, 3)})
+    def step(name, call):
+        # An operator that reports ERROR raises RuntimeError under bpy; keep its text.
+        entry = {"step": name}
+        try:
+            result = call()
+        except RuntimeError as e:
+            result, entry["error"] = {'CANCELLED'}, str(e).strip()
+        entry.update(result=sorted(result), t_s=round(time.perf_counter() - t0, 3))
+        report["steps"].append(entry)
         return result == {'FINISHED'}
 
-    if not step("import_marv", bpy.ops.pipe_sculpt.import_marv(filepath=args.joints, obj_path=args.obj)):
+    if not step("import_marv", lambda: bpy.ops.pipe_sculpt.import_marv(filepath=args.joints, obj_path=args.obj)):
         return 2
     src = bpy.context.active_object
     report["source"] = {"verts": len(src.data.vertices), "faces": len(src.data.polygons)}
@@ -127,15 +133,19 @@ def _run(args, report):
         else:
             report["notes"].append(
                 f"addon preferences absent; retopo uses the preset default target")
-        if not step("workflow_retopo", bpy.ops.pipe_sculpt.workflow_retopo(method=args.retopo)):
+        if not step("workflow_retopo", lambda: bpy.ops.pipe_sculpt.workflow_retopo(method=args.retopo)):
             return 1
         mesh = bpy.context.active_object
+        if len(mesh.data.polygons) > args.target_faces * 1.5:
+            report["notes"].append(
+                f"retopo left {len(mesh.data.polygons)} faces for a target of {args.target_faces}")
+            return 1
     report["mesh"] = {"verts": len(mesh.data.vertices), "faces": len(mesh.data.polygons)}
 
     bpy.context.view_layer.objects.active = mesh
-    step("uv_smart_unwrap", bpy.ops.pipe_sculpt.uv_smart_unwrap())
+    step("uv_smart_unwrap", bpy.ops.pipe_sculpt.uv_smart_unwrap)
     bpy.context.view_layer.objects.active = mesh
-    if not step("generate_rig", bpy.ops.pipe_sculpt.generate_rig()):
+    if not step("generate_rig", bpy.ops.pipe_sculpt.generate_rig):
         return 1
     arm = mesh.modifiers["GTR Armature"].object
     report["armature"] = {
@@ -163,7 +173,7 @@ def _run(args, report):
     }
 
     bpy.context.view_layer.objects.active = mesh
-    if not step("export_unity_fbx", bpy.ops.pipe_sculpt.export_unity_fbx(filepath=args.fbx)):
+    if not step("export_unity_fbx", lambda: bpy.ops.pipe_sculpt.export_unity_fbx(filepath=args.fbx)):
         return 1
     report["fbx"] = {"path": args.fbx, "bytes": os.path.getsize(args.fbx)}
 

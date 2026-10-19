@@ -215,6 +215,12 @@ Marv's example files (`joints-male.json`, `joints-female.json`, marv 703fd3f; up
 forward +Z, right +X, no Toes) pass with `--box-mesh 40`: 19 deform bones, the
 validator passes, and the FBX re-imports all of them.
 
+Marv's bodies (marv 73cb490: male 335 672 tris, female 319 404) measured with bpy 5.2.2:
+`--retopo QUADRIFLOW` exits 1, because Quadriflow refuses the mesh (6 452 edges in the
+male are shorter than 0.1 mm on every axis). `--retopo DECIMATE` exits 0 in about 7 s:
+22 000 tris, 19 deform bones, the FBX re-imports all of them, and 70 (male) and
+66 (female) vertices have more than 4 weights (validator warning).
+
 Measured with bpy 5.2.2 (no Unity): the Humanoid starter, voxel-remeshed at
 2 cm and written through these files, reproduces the native bone positions
 exactly; per-face groups change 2.5 % of the per-vertex tags (316 of 12 534),
@@ -359,6 +365,9 @@ bug). See [`ONION_SKIN_TEST.md`](ONION_SKIN_TEST.md).
   parts by object name, and the primitives keep Blender's default names.
 - On the Humanoid starter voxel-remeshed at 2 cm, no vertex carries the
   `neck`, `clavicle.L` or `clavicle.R` tag: those bones deform nothing.
+- Quadriflow refuses meshes with any edge under 1e-4 on every axis (Blender's
+  `mesh_is_manifold_consistent`). It used to do so with only a warning, and Retopo
+  then reported success on the unchanged mesh. Retopo now fails with the reason.
 - OBJ groups are per face, so a per-vertex tag cannot always survive the file
   (2.5 % changed in the round-trip check above).
 - The validator requires `LeftShoulder`/`RightShoulder` and `Chest`, which Unity
