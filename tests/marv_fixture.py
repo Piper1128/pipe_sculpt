@@ -51,7 +51,7 @@ def joints_doc(drop: tuple[str, ...] = ()) -> dict:
         if tail is not None:
             j["tail"] = list(tail)
         joints.append(j)
-    return {"schema": "marv.joints/1", "unit": "mm", "up": "+Z", "forward": "-Y",
+    return {"schema": "marv.joints/1", "unit": "mm", "up": "+Z", "forward": "-Y", "right": "-X",
             "rest_pose": "arms_down", "joints": joints}
 
 

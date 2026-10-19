@@ -4,7 +4,8 @@ Born Clean: NO bpy import. Parses the two files Marv writes across the file
 boundary and turns them into the same data GTR already consumes:
 
   - a bone table (id, parent, head, tail, kind) in Blender space
-    (metres, +Z up, character facing -Y), serialised exactly like
+    (metres, +Z up, character facing -Y, character's right at -X),
+    serialised exactly like
     rigging._serialize_bones so Generate Rig reads it unchanged;
   - a per-vertex bone tag (index into rigging.DEFORM_BONE_NAMES), taken
     from the OBJ group of the vertex's faces.
@@ -17,7 +18,8 @@ joints.json (schema "marv.joints/1"):
     {
       "schema": "marv.joints/1",
       "unit": "mm" | "m",                 # applies to the OBJ too
-      "up": "+Z", "forward": "-Y",        # Marv's frame; converted to Blender
+      "up": "+Z", "forward": "-Y",        # Marv's frame: all three axes are
+      "right": "-X",                      # required (handedness is not assumed)
       "rest_pose": "arms_down",           # informational, stored on the mesh
       "mesh": "body.obj",                 # optional, relative to joints.json
       "joints": [
@@ -55,9 +57,11 @@ UNIT_SCALE = {"mm": 0.001, "m": 1.0}
 UNITY_TO_PIPESCULPT = {u: p for p, u in validator_core.PIPESCULPT_TO_UNITY.items()}
 UNITY_TO_PIPESCULPT.update({"LeftToes": "toes.L", "RightToes": "toes.R"})
 
-# Blender target frame: +Z up, character faces -Y (see validator_core.rule_facing_axis).
+# Blender target frame: +Z up, character faces -Y (see validator_core.rule_facing_axis),
+# character's right at -X (PipeSculpt's .L bones sit at +X).
 _TARGET_UP = (2, 1.0)
 _TARGET_FORWARD = (1, -1.0)
+_TARGET_RIGHT = (0, -1.0)
 
 # Root control bone, like HUMANOID's 'root': on the floor below the hips.
 ROOT_BONE = "root"
@@ -94,31 +98,28 @@ def _parse_axis(text: str, what: str) -> tuple[int, float]:
     return "XYZ".index(text[1]), (1.0 if text[0] == "+" else -1.0)
 
 
-def axis_matrix(up: str, forward: str) -> tuple[tuple[float, float, float], ...]:
-    """Rotation (rows) taking Marv's frame to Blender's (+Z up, facing -Y)."""
-    u = _parse_axis(up, "up")
-    f = _parse_axis(forward, "forward")
-    if u[0] == f[0]:
-        raise MarvImportError(f"'up' {up} and 'forward' {forward} share an axis")
-    # Source basis vectors for up and forward, and their target images.
-    src_u = [0.0, 0.0, 0.0]; src_u[u[0]] = u[1]
-    src_f = [0.0, 0.0, 0.0]; src_f[f[0]] = f[1]
-    dst_u = [0.0, 0.0, 0.0]; dst_u[_TARGET_UP[0]] = _TARGET_UP[1]
-    dst_f = [0.0, 0.0, 0.0]; dst_f[_TARGET_FORWARD[0]] = _TARGET_FORWARD[1]
-    src_s = _cross(src_f, src_u)
-    dst_s = _cross(dst_f, dst_u)
-    # M = D * S^T, with S, D orthonormal column bases (f, u, s).
-    rows = []
-    for i in range(3):
-        rows.append(tuple(
-            dst_f[i] * src_f[j] + dst_u[i] * src_u[j] + dst_s[i] * src_s[j]
-            for j in range(3)
-        ))
-    return tuple(rows)
+def axis_matrix(up: str, forward: str, right: str) -> tuple[tuple[float, float, float], ...]:
+    """Matrix (rows) taking the source frame to Blender's (+Z up, facing -Y, right -X).
+
+    All three axes are declared, so a left-handed source (e.g. Unity's: up +Y,
+    forward +Z, right +X) gives determinant -1: a change of handedness, not a
+    rotation. Without 'right' that frame would be read as its mirror image and
+    every .L bone would land on the character's right side.
+    """
+    axes = [_parse_axis(up, "up"), _parse_axis(forward, "forward"), _parse_axis(right, "right")]
+    if len({a[0] for a in axes}) != 3:
+        raise MarvImportError(f"'up' {up}, 'forward' {forward} and 'right' {right} must use three different axes")
+    targets = (_TARGET_UP, _TARGET_FORWARD, _TARGET_RIGHT)
+    rows = [[0.0, 0.0, 0.0] for _ in range(3)]
+    for (src_i, src_sign), (dst_i, dst_sign) in zip(axes, targets):
+        rows[dst_i][src_i] = src_sign * dst_sign
+    return tuple(tuple(r) for r in rows)
 
 
-def _cross(a, b):
-    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+def determinant(m) -> float:
+    return (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
 
 
 def _transform(m, scale, p):
@@ -143,7 +144,7 @@ def parse_joints(doc: dict) -> dict:
     unit = doc.get("unit")
     if unit not in UNIT_SCALE:
         raise MarvImportError(f"unit must be one of {sorted(UNIT_SCALE)}, got {unit!r}")
-    matrix = axis_matrix(doc.get("up"), doc.get("forward"))
+    matrix = axis_matrix(doc.get("up"), doc.get("forward"), doc.get("right"))
     joints = doc.get("joints")
     if not isinstance(joints, list) or not joints:
         raise MarvImportError("'joints' must be a non-empty list")
@@ -336,10 +337,12 @@ def build_body(joints_doc: dict, obj_text: str, bone_index: dict[str, int]) -> M
         raise MarvImportError(f"OBJ has {loose} vertices used by no face")
 
     m, s = parsed["matrix"], parsed["scale"]
+    # A handedness change mirrors the winding; reverse it so normals stay outward.
+    faces = mesh.faces if determinant(m) > 0 else [tuple(reversed(f)) for f in mesh.faces]
     return MarvBody(
         bones=bones,
         vertices=[_transform(m, s, v) for v in mesh.vertices],
-        faces=mesh.faces,
+        faces=faces,
         vertex_tags=[tag_of_group[g] for g in per_vertex],
         provenance=provenance,
         rest_pose=parsed["rest_pose"],

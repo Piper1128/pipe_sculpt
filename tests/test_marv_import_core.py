@@ -21,28 +21,36 @@ def _body(doc=None, obj=None):
     return mic.build_body(doc or fx.joints_doc(), obj or fx.obj_text(), INDEX)
 
 
+def _apply(m, p):
+    return tuple(sum(m[i][j] * p[j] for j in range(3)) for i in range(3))
+
+
 class TestAxes:
     def test_identity_for_blender_frame(self):
-        assert mic.axis_matrix("+Z", "-Y") == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+        assert mic.axis_matrix("+Z", "-Y", "-X") == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
 
-    def test_y_up_frame(self):
-        # Y-up, facing +Z (Unity/glTF style): up must land on +Z, forward on -Y.
-        m = mic.axis_matrix("+Y", "+Z")
-        apply = lambda p: tuple(sum(m[i][j] * p[j] for j in range(3)) for i in range(3))
-        assert apply((0, 1, 0)) == (0, 0, 1)
-        assert apply((0, 0, 1)) == (0, -1, 0)
+    def test_y_up_right_handed(self):
+        # Y-up, facing +Z, right -X (glTF): a rotation.
+        m = mic.axis_matrix("+Y", "+Z", "-X")
+        assert _apply(m, (0, 1, 0)) == (0, 0, 1)
+        assert _apply(m, (0, 0, 1)) == (0, -1, 0)
+        assert mic.determinant(m) == 1
 
-    def test_rotation_not_reflection(self):
-        m = mic.axis_matrix("+Y", "+Z")
-        det = (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-               - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-               + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
-        assert det == 1
+    def test_left_handed_frame_keeps_left_left(self):
+        # Marv/Unity frame: up +Y, forward +Z, right +X. Anatomical left is -X
+        # there and must land at Blender +X (where PipeSculpt's .L bones are).
+        m = mic.axis_matrix("+Y", "+Z", "+X")
+        assert _apply(m, (-80, 0, 0)) == (80, 0, 0)
+        assert _apply(m, (0, 0, 100)) == (0, -100, 0)
+        assert mic.determinant(m) == -1
 
-    @pytest.mark.parametrize("up,fwd", [("+Z", "-Z"), ("Z", "-Y"), ("+W", "-Y")])
-    def test_bad_axes(self, up, fwd):
+    @pytest.mark.parametrize("up,fwd,right", [
+        ("+Z", "-Z", "-X"), ("Z", "-Y", "-X"), ("+W", "-Y", "-X"),
+        ("+Z", "-Y", "+Y"), ("+Z", "-Y", None),
+    ])
+    def test_bad_axes(self, up, fwd, right):
         with pytest.raises(mic.MarvImportError):
-            mic.axis_matrix(up, fwd)
+            mic.axis_matrix(up, fwd, right)
 
 
 class TestJoints:
@@ -82,6 +90,7 @@ class TestJoints:
     @pytest.mark.parametrize("mutate,match", [
         (lambda d: d.update(schema="marv.joints/2"), "schema"),
         (lambda d: d.update(unit="cm"), "unit"),
+        (lambda d: d.pop("right"), "right"),
         (lambda d: d["joints"].append(copy.deepcopy(d["joints"][1])), "twice"),
         (lambda d: d["joints"][1].update(name="Spine1"), "not a supported"),
         (lambda d: d["joints"][1].update(parent="Nope"), "unknown parent"),
@@ -158,7 +167,7 @@ class TestBody:
             j["center"] = swap(j["center"])
             if "tail" in j:
                 j["tail"] = swap(j["tail"])
-        doc.update(up="+Y", forward="+Z")
+        doc.update(up="+Y", forward="+Z", right="-X")
         lines = []
         for line in fx.obj_text().splitlines():
             if line.startswith("v "):
@@ -169,3 +178,31 @@ class TestBody:
         a, b = _body(), _body(doc=doc, obj="\n".join(lines))
         assert [pytest.approx(v) for v in a.vertices] == b.vertices
         assert a.bones == [dict(x, head=pytest.approx(x["head"]), tail=pytest.approx(x["tail"])) for x in b.bones]
+
+
+class TestHandedness:
+    def _mirrored(self):
+        """The fixture written in a left-handed frame (up +Y, forward +Z, right +X)."""
+        to_lh = lambda p: [-p[0], p[2], -p[1]]   # Blender (x,y,z) -> LH frame
+        doc = fx.joints_doc()
+        for j in doc["joints"]:
+            j["center"] = to_lh(j["center"])
+            if "tail" in j:
+                j["tail"] = to_lh(j["tail"])
+        doc.update(up="+Y", forward="+Z", right="+X")
+        lines = []
+        for line in fx.obj_text().splitlines():
+            if line.startswith("v "):
+                lines.append("v %r %r %r" % tuple(to_lh(list(map(float, line.split()[1:])))))
+            else:
+                lines.append(line)
+        return doc, "\n".join(lines)
+
+    def test_left_handed_input_lands_like_blender(self):
+        doc, obj = self._mirrored()
+        a, b = _body(), _body(doc=doc, obj=obj)
+        assert [pytest.approx(v) for v in a.vertices] == b.vertices
+        by_a = {x["id"]: x for x in a.bones}
+        for x in b.bones:
+            assert x["head"] == pytest.approx(by_a[x["id"]]["head"])
+        assert b.faces == [tuple(reversed(f)) for f in a.faces]
