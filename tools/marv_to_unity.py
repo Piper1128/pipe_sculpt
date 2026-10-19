@@ -13,6 +13,9 @@ Options:
     --report PATH        write the measured report as JSON
     --fixture DIR        write tests/marv_fixture.py's body to DIR first and use it
     --fixture-drop NAME  leave a bone out of the fixture (repeatable)
+    --box-mesh MM        no OBJ yet: write one axis-aligned box per joint (head..tail,
+                         grown by MM in the file's unit) and use it. Tests the joints
+                         and the chain, not a body.
 
 Exit code 0 = validator passed and the FBX re-imports with every deform
 bone; 1 = it did not; 2 = import failed. The report says which.
@@ -41,6 +44,7 @@ def _args():
     p.add_argument("--report", default="")
     p.add_argument("--fixture", default="")
     p.add_argument("--fixture-drop", action="append", default=[])
+    p.add_argument("--box-mesh", type=float, default=0.0)
     return p.parse_args(argv)
 
 
@@ -56,6 +60,37 @@ def _write_fixture(directory, drop):
     with open(os.path.join(directory, "body.obj"), "w", encoding="utf-8") as f:
         f.write(marv_fixture.obj_text(drop=tuple(drop)))
     return joints
+
+
+def _write_box_mesh(joints_path, half_width):
+    """One box per joint from its centre to its tail (only child's centre if absent)."""
+    import tempfile
+    with open(joints_path, encoding="utf-8") as f:
+        doc = json.load(f)
+    by_name = {j["name"]: j for j in doc["joints"]}
+    children = {}
+    for j in doc["joints"]:
+        children.setdefault(j.get("parent"), []).append(j["name"])
+    lines = [f"# box mesh from {os.path.basename(joints_path)}, half-width {half_width}"]
+    base = 1
+    for j in doc["joints"]:
+        c = j["center"]
+        t = j.get("tail") or by_name[children[j["name"]][0]]["center"]
+        lo = [min(c[i], t[i]) - half_width for i in range(3)]
+        hi = [max(c[i], t[i]) + half_width for i in range(3)]
+        lines.append(f"g {j['name']}")
+        for x in (lo[0], hi[0]):
+            for y in (lo[1], hi[1]):
+                for z in (lo[2], hi[2]):
+                    lines.append(f"v {x!r} {y!r} {z!r}")
+        for q in ((0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1),
+                  (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)):
+            lines.append("f " + " ".join(str(base + k) for k in q))
+        base += 8
+    path = os.path.join(tempfile.mkdtemp(prefix="marv_boxes_"), "boxes.obj")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return path
 
 
 def _run(args, report):
@@ -156,7 +191,9 @@ def main():
     args = _args()
     if args.fixture:
         args.joints = _write_fixture(args.fixture, args.fixture_drop)
-    report = {"joints": args.joints, "steps": [], "notes": []}
+    if args.box_mesh > 0 and not args.obj:
+        args.obj = _write_box_mesh(args.joints, args.box_mesh)
+    report = {"joints": args.joints, "obj": args.obj, "steps": [], "notes": []}
     try:
         code = _run(args, report)
     except Exception as e:  # report the failure instead of a bare traceback

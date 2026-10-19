@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Blender](https://img.shields.io/badge/Blender-5.0%2B-orange?logo=blender&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-349%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-353%20passing-brightgreen)
 ![Status](https://img.shields.io/badge/version-0.23.0-informational)
 
 **A Blender 5.x addon for the whole sculpt → retopo → UV → paint → rig →
@@ -63,7 +63,7 @@ with a Humanoid validator.
 - **Unity 6 export** — axis-mode-aware FBX, a Humanoid bone validator, and an
   axis-calibration round-trip helper.
 - **Born-clean engineering** — pure logic split into `*_core.py` modules with
-  349 headless `pytest` tests, plus a Blender API-audit harness.
+  353 headless `pytest` tests, plus a Blender API-audit harness.
 
 ---
 
@@ -191,8 +191,10 @@ like a starter:
 - **`body.obj`** — one `g <bone>` group per bone. A vertex gets the group
   held by most of its faces (tie: the group first in the file). That group is
   the GTR tag.
-- **`joints.json`** (`"schema": "marv.joints/1"`) — `unit` (`mm`/`m`), `up` and
-  `forward` axes (converted to Blender's +Z up, facing −Y), `rest_pose`, and per
+- **`joints.json`** (`"schema": "marv.joints/1"`) — `unit` (`mm`/`m`), `up`,
+  `forward` and `right` axes, all three required (converted to Blender's +Z up,
+  facing −Y, right −X; a left-handed frame such as Unity's +Y/+Z/+X is a
+  handedness change, and face winding is reversed with it), `rest_pose`, and per
   joint `name` (Unity HumanBodyBones name), `parent`, `center` (= bone head),
   optional `tail` (required when a joint has zero or several children) and an
   opaque `provenance` that is stored on the mesh. The armature comes from these
@@ -206,7 +208,12 @@ named. Headless, end to end:
 python tools/marv_to_unity.py joints.json out.fbx --target-faces 22000 --report report.json
 python tools/marv_to_unity.py x out.fbx --fixture /tmp/fx                          # synthetic body
 python tools/marv_to_unity.py x out.fbx --fixture /tmp/fx --fixture-drop LeftUpperArm  # must exit 1
+python tools/marv_to_unity.py joints.json out.fbx --box-mesh 40   # joints only: one box per bone
 ```
+
+Marv's example files (`joints-male.json`, `joints-female.json`, marv 703fd3f; up +Y,
+forward +Z, right +X, no Toes) pass with `--box-mesh 40`: 19 deform bones, the
+validator passes, and the FBX re-imports all of them.
 
 Measured with bpy 5.2.2 (no Unity): the Humanoid starter, voxel-remeshed at
 2 cm and written through these files, reproduces the native bone positions
@@ -281,7 +288,7 @@ conventions:
   tables, UV/texel math, hair surface sampling, animation mirror/loop/breakdown
   math, ghost-frame selection, clip naming). Runs headlessly.
 - **`*_ops.py`** — thin Blender operator/panel shells over the core.
-- **`tests/`** — **349 `pytest` tests** that run without Blender
+- **`tests/`** — **353 `pytest` tests** that run without Blender
   (`python -m pytest tests/`); `conftest.py` loads the core modules directly so
   discovery never imports `bpy`.
 - **`tests/api_audit.py`** + **`tests/verify_rig_axes.py`** — Blender-headless
@@ -324,7 +331,7 @@ The headless harnesses also run with the `bpy` module from PyPI
 
 **v0.23.0** — the full sculpt-to-Unity pipeline plus the complete animation
 module (pose/keying/loop, bone picker, clip manager, additive layers, onion
-skin) are implemented. Measured 2026-10-19 with bpy 5.2.2: 349 headless tests
+skin) are implemented. Measured 2026-10-19 with bpy 5.2.2: 353 headless tests
 pass; `tests/api_audit.py` reports one problem (hair re-spawn: missing Surface
 Deform modifier), the same on 3b0945e before the Marv import. No FBX from the
 Marv path has been imported into Unity yet.
