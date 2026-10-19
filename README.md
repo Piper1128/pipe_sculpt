@@ -221,6 +221,12 @@ male are shorter than 0.1 mm on every axis). `--retopo DECIMATE` exits 0 in abou
 22 000 tris, 19 deform bones, the FBX re-imports all of them, and 70 (male) and
 66 (female) vertices have more than 4 weights (validator warning).
 
+After Marv's `collapse` with a 0.2 mm edge floor (marv 4eccde1: male 322 314 tris,
+female 306 512, shortest edge 0.2 mm) the default `--retopo QUADRIFLOW` exits 0 for
+both in 35–40 s: 19 308 / 21 197 quads, 19 deform bones, no validator issues, and the
+FBX re-imports all of them. Genus is kept for the male (6) and drops from 2 to 1 for the
+female.
+
 Measured with bpy 5.2.2 (no Unity): the Humanoid starter, voxel-remeshed at
 2 cm and written through these files, reproduces the native bone positions
 exactly; per-face groups change 2.5 % of the per-vertex tags (316 of 12 534),
