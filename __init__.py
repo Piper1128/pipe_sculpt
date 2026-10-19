@@ -12,6 +12,7 @@ def _modules():
     from . import pie_menus
     from . import rigging
     from . import starters
+    from . import marv_import_ops
     from . import workflow_ops
     from . import bake_ops
     from . import export_ops
@@ -35,7 +36,7 @@ def _modules():
     from . import workflow_panel
     from . import keymap
     return [
-        preferences, pie_menus, rigging, starters, workflow_ops,
+        preferences, pie_menus, rigging, starters, marv_import_ops, workflow_ops,
         bake_ops, export_ops, manual_retopo_ops, uv_ops, paint_ops,
         ref_ops, hair_ops, validator_ops, project_ops, handlers,
         palette_ops, viz_ops, anim_ops, picker_ops, clip_ops, layer_ops,
