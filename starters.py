@@ -558,6 +558,9 @@ class PIPESCULPT_PT_starters(Panel):
         grid.operator("pipe_sculpt.starter_bird", icon='FORCE_WIND')
         grid.operator("pipe_sculpt.starter_mech", icon='MOD_ARMATURE')
 
+        layout.label(text="From file (GTR tags from OBJ groups)")
+        layout.operator("pipe_sculpt.import_marv", icon='IMPORT')
+
 
 _classes = (
     PIPESCULPT_OT_starter_sphere,

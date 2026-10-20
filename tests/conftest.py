@@ -29,6 +29,8 @@ def _load_module_by_path(name: str, rel_path: str):
 # without triggering pipe_sculpt/__init__.py (which imports bpy).
 _load_module_by_path('hair_core', 'hair_core.py')
 _load_module_by_path('validator_core', 'validator_core.py')
+# marv_import_core imports validator_core (loaded above).
+_load_module_by_path('marv_import_core', 'marv_import_core.py')
 _load_module_by_path('project_core', 'project_core.py')
 _load_module_by_path('palette_core', 'palette_core.py')
 _load_module_by_path('anim_core', 'anim_core.py')

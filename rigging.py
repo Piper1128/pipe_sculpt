@@ -739,16 +739,18 @@ class PIPESCULPT_OT_generate_rig(Operator):
         arm_mod.use_bone_envelopes = False
 
         # --- Smooth weights ---
-        if not bpy.app.background:
-            context.view_layer.objects.active = mesh_obj
-            try:
-                bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
-                bpy.ops.object.vertex_group_smooth(
-                    group_select_mode='ALL', factor=0.5, repeat=3
-                )
-                bpy.ops.object.mode_set(mode='OBJECT')
-            except RuntimeError as e:
-                self.report({'WARNING'}, f"Weight smoothing skipped: {e}")
+        # Runs in background mode too (measured with bpy 5.2.2: WEIGHT_PAINT +
+        # vertex_group_smooth works headless). Skipping it there left headless
+        # rigs with hard 1.0 weights, i.e. rigid segments.
+        context.view_layer.objects.active = mesh_obj
+        try:
+            bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
+            bpy.ops.object.vertex_group_smooth(
+                group_select_mode='ALL', factor=0.5, repeat=3
+            )
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except RuntimeError as e:
+            self.report({'WARNING'}, f"Weight smoothing skipped: {e}")
 
         # --- IK constraints ---
         if ik_data:
