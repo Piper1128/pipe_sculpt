@@ -10,6 +10,9 @@ Options:
     --obj PATH           body mesh (default: 'mesh' field in joints.json)
     --target-faces N     retopo target; skipped if the mesh is already below it
     --retopo METHOD      QUADRIFLOW (default) or DECIMATE
+    --weights METHOD     HEAT (default) or GTR: Generate Rig's skin weights. HEAT is
+                         the default here because GTR Tags tear Marv bodies at
+                         shoulder and hip (tests/verify_stretch.py)
     --report PATH        write the measured report as JSON
     --fixture DIR        write tests/marv_fixture.py's body to DIR first and use it
     --fixture-drop NAME  leave a bone out of the fixture (repeatable)
@@ -41,6 +44,7 @@ def _args():
     p.add_argument("--obj", default="")
     p.add_argument("--target-faces", type=int, default=22000)
     p.add_argument("--retopo", choices=("QUADRIFLOW", "DECIMATE"), default="QUADRIFLOW")
+    p.add_argument("--weights", choices=("HEAT", "GTR"), default="HEAT")
     p.add_argument("--report", default="")
     p.add_argument("--fixture", default="")
     p.add_argument("--fixture-drop", action="append", default=[])
@@ -145,7 +149,8 @@ def _run(args, report):
     bpy.context.view_layer.objects.active = mesh
     step("uv_smart_unwrap", bpy.ops.pipe_sculpt.uv_smart_unwrap)
     bpy.context.view_layer.objects.active = mesh
-    if not step("generate_rig", bpy.ops.pipe_sculpt.generate_rig):
+    report["weights_method"] = args.weights
+    if not step("generate_rig", lambda: bpy.ops.pipe_sculpt.generate_rig(weights=args.weights)):
         return 1
     arm = mesh.modifiers["GTR Armature"].object
     report["armature"] = {
