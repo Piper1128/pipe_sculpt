@@ -182,6 +182,22 @@ rebuilds cleanly — no orphan armatures. The spine is split into **spine + ches
 (Unity Hips→Spine→Chest→Neck→Head) for better torso deformation and mocap
 retarget.
 
+**Weights** has two modes. *GTR Tags* (default) puts weight 1.0 on each vertex's
+tagged bone and smooths (factor 0.5, 3 passes). *Heat* uses Blender's bone-heat
+weights (Automatic Weights), capped at 4 bones per vertex and normalised for
+Unity; the tags still build the skeleton but do not set the weights. Heat
+refuses (CANCELLED, rig removed) if any vertex is left without a deform weight.
+
+Measured 2026-11-01 on Marv's trunk bodies (marv dcbcc6b, Quadriflow 22k,
+`tests/verify_stretch.py`: triangles stretched >2.5x with upper_arm.R raised
+150° / upper_leg.L bent 90°): GTR Tags male 164 / 176, female 178 / 281 (max
+12–26x); Heat male 24 / 10, female 75 / 37 (max 3.0–3.6x). Uncapped heat gave
+4 / 0 and 22 / 0, so the 4-bone cap costs part of the gain. Limiting heat to
+the tagged bone and its skeleton neighbours tears a seam at every tag border
+(82–117 stretched), so that mix is not offered. In Unity (Grenade Throw clip)
+the GTR FBXs had 0.7–1.4 % of triangles stretched against 0.09 % for a
+reference character; the Heat FBXs have not been run in Unity yet.
+
 #### Import Marv Body (GTR tags from a file)
 
 *Starter Meshes → From file* reads a body written by Marv (or any tool) as
@@ -209,6 +225,8 @@ python tools/marv_to_unity.py joints.json out.fbx --target-faces 22000 --report 
 python tools/marv_to_unity.py x out.fbx --fixture /tmp/fx                          # synthetic body
 python tools/marv_to_unity.py x out.fbx --fixture /tmp/fx --fixture-drop LeftUpperArm  # must exit 1
 python tools/marv_to_unity.py joints.json out.fbx --box-mesh 40   # joints only: one box per bone
+python tools/marv_to_unity.py joints.json out.fbx --weights GTR    # tag weights instead of Heat (default)
+python tests/verify_stretch.py out.fbx --max 100                   # exit 1 if a pose tears >100 tris
 ```
 
 Marv's example files (`joints-male.json`, `joints-female.json`, marv 703fd3f; up +Y,
@@ -313,6 +331,8 @@ python -m pytest tests/                                   # pure-logic tests
 "<blender>" --background --python tests/api_audit.py      # API + operator smoke
 "<blender>" --background --python tests/verify_rig_axes.py # rig/skeleton checks
 python tests/verify_marv_roundtrip.py                     # Marv import vs native GTR (pip bpy)
+python tests/verify_stretch.py character.fbx              # skin stretch at shoulder/hip (pip bpy)
+python tests/verify_webbing.py character.fbx              # torso dragged by raised arms (pip bpy)
 ```
 
 The headless harnesses also run with the `bpy` module from PyPI
@@ -345,8 +365,10 @@ The headless harnesses also run with the `bpy` module from PyPI
 module (pose/keying/loop, bone picker, clip manager, additive layers, onion
 skin) are implemented. Measured 2026-10-19 with bpy 5.2.2: 353 headless tests
 pass; `tests/api_audit.py` reports one problem (hair re-spawn: missing Surface
-Deform modifier), the same on 3b0945e before the Marv import. No FBX from the
-Marv path has been imported into Unity yet.
+Deform modifier), the same on 3b0945e before the Marv import. 2026-11-01: Marv
+FBXs with GTR Tags weights imported into Unity 6000.3.7f1 as valid Humanoid
+avatars, and a Grenade Throw clip drove all of them in Play mode (seen by the
+owner); the Heat-weighted FBXs have not been run in Unity yet.
 
 Onion skinning's FK deform-capture is headless-verified; its **IK-driven**
 deform-capture is verified only interactively (in Blender's background mode IK
@@ -364,6 +386,11 @@ bug). See [`ONION_SKIN_TEST.md`](ONION_SKIN_TEST.md).
 - Bake writes only to faces using the per-mesh bake material; multi-slot meshes
   get a warning. Curvature isn't baked (Substance derives a better one from the
   normal map).
+- `tests/verify_webbing.py` counts torso vertices moved >2 cm by raised arms. It was
+  calibrated on GTR Tags weights; with Heat weights, torso vertices near the armpit
+  carry some upper-arm weight and move with it (Marv trunk: 279 / 463 vertices,
+  max 6.8 cm, against 252–500 and 34–42 cm for the fused-arm case). Its 2 cm
+  threshold does not separate the two; not recalibrated.
 - IK pole-angle math is derived for the default rest pose; editing bones before
   Generate Rig can twist it. Import Marv Body adds no IK chains.
 - The Humanoid starter's **A-Pose** and **Idle** presets do not move the mesh
