@@ -201,7 +201,7 @@ class PIPESCULPT_OT_workflow_retopo(Operator):
 
     def _quadriflow_retopo(self, context, retopo, target_faces, use_sym):
         try:
-            bpy.ops.object.quadriflow_remesh(
+            result = bpy.ops.object.quadriflow_remesh(
                 target_faces=target_faces,
                 use_mesh_symmetry=use_sym,
                 use_preserve_sharp=False,
@@ -211,6 +211,17 @@ class PIPESCULPT_OT_workflow_retopo(Operator):
             )
         except RuntimeError as e:
             return False, f"Quadriflow failed: {e}"
+        # Quadriflow refuses some meshes by returning CANCELLED with only a
+        # warning (no exception) — e.g. any edge shorter than 1e-4 on every
+        # axis (object_remesh.cc mesh_is_manifold_consistent). Without this
+        # check Retopo reported success on an unchanged mesh.
+        if result != {'FINISHED'}:
+            return False, (
+                "Quadriflow refused the mesh (it needs a manifold, consistently "
+                "oriented mesh with no edge under 1e-4 (0.1 mm at metre scale) on "
+                "every axis). "
+                "Try Decimate, or clean the mesh first"
+            )
         return True, None
 
     def execute(self, context):

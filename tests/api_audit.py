@@ -472,6 +472,54 @@ def _rig_styling():
 
 check("rig styling (widgets/colours/idempotent/clear)", _rig_styling)
 
+
+def _heat_weights():
+    # Weights: Heat — every vertex on a deform bone, at most 4 influences
+    # summing to 1 (Unity skins with 4), one Armature modifier, mesh parented.
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    mesh = bpy.context.active_object
+    assert bpy.ops.pipe_sculpt.generate_rig(weights='HEAT') == {'FINISHED'}
+    arm = mesh.parent
+    assert arm is not None and arm.type == 'ARMATURE', "mesh not parented to the rig"
+    mods = [m.name for m in mesh.modifiers if m.type == 'ARMATURE']
+    assert mods == ["GTR Armature"], f"armature modifiers: {mods}"
+    deform = {b.name for b in arm.data.bones if b.use_deform}
+    idx = {g.index for g in mesh.vertex_groups if g.name in deform}
+    for v in mesh.data.vertices:
+        ws = [g.weight for g in v.groups if g.group in idx and g.weight > 1e-6]
+        assert ws, f"vertex {v.index} unweighted"
+        assert len(ws) <= 4, f"vertex {v.index} has {len(ws)} influences"
+        assert abs(sum(ws) - 1.0) < 1e-3, f"vertex {v.index} weights sum to {sum(ws)}"
+
+
+check("generate_rig weights=HEAT (all weighted, <=4, normalised)", _heat_weights)
+
+
+def _heat_refuses_partial():
+    # A stray triangle 50 m away gets no heat solution. Generate Rig must
+    # refuse and leave no half-built rig behind, not export a partly skinned mesh.
+    import bmesh
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.pipe_sculpt.starter_humanoid()
+    mesh = bpy.context.active_object
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    bm.faces.new([bm.verts.new(c) for c in ((50, 50, 50), (50.1, 50, 50), (50, 50.1, 50))])
+    bm.to_mesh(mesh.data)
+    bm.free()
+    try:
+        result = bpy.ops.pipe_sculpt.generate_rig(weights='HEAT')
+    except RuntimeError as e:  # ERROR reports raise under bpy
+        result = {'CANCELLED'}
+        assert "without a deform weight" in str(e), f"unexpected error: {e}"
+    assert result == {'CANCELLED'}, f"partial heat weighting accepted: {result}"
+    assert not any(o.type == 'ARMATURE' for o in bpy.data.objects), "armature left behind"
+    assert mesh.parent is None and not any(m.type == 'ARMATURE' for m in mesh.modifiers), \
+        "mesh left parented/modified"
+
+
+check("generate_rig weights=HEAT refuses a partly weighted mesh", _heat_refuses_partial)
+
 print("\n" + SEP)
 if problems:
     print(f"AUDIT: {len(problems)} PROBLEM(S)")

@@ -14,7 +14,7 @@ GTR's **skelet-topologi og bone-navne er faktisk tæt på Unity Humanoid** (pelv
 | # | Fund | Alvor | Rammer | Status |
 |---|------|-------|--------|--------|
 | A | `roll = 0.0` på alle bones | **Medium** | Generic-export + cross-rig curve-copy + IK-pole-robusthed. **IKKE** Unity Humanoid. | Verificeret analytisk; test-script vedlagt |
-| B | Kun **én** spine-bone | **Høj** | Deformations-kvalitet + retarget fra 3-spine mocap | Verificeret mod Unity Humanoid-krav |
+| B | Kun **én** spine-bone | **Høj** | Deformations-kvalitet + retarget fra 3-spine mocap | **Rettet** (målt 2026-10-19 på 3b0945e: `pelvis→spine→chest→neck→head`, rigging.py:145-149; HUMANOID + MECH) |
 | C | Deform + control + IK i samme armatur | Medium | FBX-export forurener Unity-avataren med ikke-deform-bones | Verificeret i kode |
 | D | Ingen twist-bones | Lav | Deformation af underarm/lår ved vrid | Verificeret i kode |
 | E | Hardkodet rest-pose + proportioner | Medium | Skelet matcher ikke den faktiske sculpt | Verificeret i kode |

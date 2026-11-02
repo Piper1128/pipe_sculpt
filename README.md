@@ -2,8 +2,8 @@
 
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Blender](https://img.shields.io/badge/Blender-5.0%2B-orange?logo=blender&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-242%20passing-brightgreen)
-![Status](https://img.shields.io/badge/version-0.18.0-informational)
+![Tests](https://img.shields.io/badge/tests-353%20passing-brightgreen)
+![Status](https://img.shields.io/badge/version-0.23.0-informational)
 
 **A Blender 5.x addon for the whole sculpt → retopo → UV → paint → rig →
 animate → bake → Unity pipeline, driven from one N-panel.**
@@ -63,7 +63,7 @@ with a Humanoid validator.
 - **Unity 6 export** — axis-mode-aware FBX, a Humanoid bone validator, and an
   axis-calibration round-trip helper.
 - **Born-clean engineering** — pure logic split into `*_core.py` modules with
-  242 headless `pytest` tests, plus a Blender API-audit harness.
+  353 headless `pytest` tests, plus a Blender API-audit harness.
 
 ---
 
@@ -182,6 +182,76 @@ rebuilds cleanly — no orphan armatures. The spine is split into **spine + ches
 (Unity Hips→Spine→Chest→Neck→Head) for better torso deformation and mocap
 retarget.
 
+**Weights** has two modes. *GTR Tags* (default) puts weight 1.0 on each vertex's
+tagged bone and smooths (factor 0.5, 3 passes). *Heat* uses Blender's bone-heat
+weights (Automatic Weights), capped at 4 bones per vertex and normalised for
+Unity; the tags still build the skeleton but do not set the weights. Heat
+refuses (CANCELLED, rig removed) if any vertex is left without a deform weight.
+
+Measured 2026-11-01 on Marv's trunk bodies (marv dcbcc6b, Quadriflow 22k,
+`tests/verify_stretch.py`: triangles stretched >2.5x with upper_arm.R raised
+150° / upper_leg.L bent 90°): GTR Tags male 164 / 176, female 178 / 281 (max
+12–26x); Heat male 24 / 10, female 75 / 37 (max 3.0–3.6x). Uncapped heat gave
+4 / 0 and 22 / 0, so the 4-bone cap costs part of the gain. Limiting heat to
+the tagged bone and its skeleton neighbours tears a seam at every tag border
+(82–117 stretched), so that mix is not offered. In Unity (Grenade Throw clip)
+the GTR FBXs had 0.7–1.4 % of triangles stretched against 0.09 % for a
+reference character; the Heat FBXs have not been run in Unity yet.
+
+#### Import Marv Body (GTR tags from a file)
+
+*Starter Meshes → From file* reads a body written by Marv (or any tool) as
+two files and turns it into a tagged mesh that Retopo and Generate Rig treat
+like a starter:
+
+- **`body.obj`** — one `g <bone>` group per bone. A vertex gets the group
+  held by most of its faces (tie: the group first in the file). That group is
+  the GTR tag.
+- **`joints.json`** (`"schema": "marv.joints/1"`) — `unit` (`mm`/`m`), `up`,
+  `forward` and `right` axes, all three required (converted to Blender's +Z up,
+  facing −Y, right −X; a left-handed frame such as Unity's +Y/+Z/+X is a
+  handedness change, and face winding is reversed with it), `rest_pose`, and per
+  joint `name` (Unity HumanBodyBones name), `parent`, `center` (= bone head),
+  optional `tail` (required when a joint has zero or several children) and an
+  opaque `provenance` that is stored on the mesh. The armature comes from these
+  centres, not from the starter's fixed proportions.
+
+Supported names: the 19 in `validator_core.PIPESCULPT_TO_UNITY` plus
+`LeftToes`/`RightToes`. Format errors stop the import with the offending item
+named. Headless, end to end:
+
+```bash
+python tools/marv_to_unity.py joints.json out.fbx --target-faces 22000 --report report.json
+python tools/marv_to_unity.py x out.fbx --fixture /tmp/fx                          # synthetic body
+python tools/marv_to_unity.py x out.fbx --fixture /tmp/fx --fixture-drop LeftUpperArm  # must exit 1
+python tools/marv_to_unity.py joints.json out.fbx --box-mesh 40   # joints only: one box per bone
+python tools/marv_to_unity.py joints.json out.fbx --weights GTR    # tag weights instead of Heat (default)
+python tests/verify_stretch.py out.fbx --max 100                   # exit 1 if a pose tears >100 tris
+```
+
+Marv's example files (`joints-male.json`, `joints-female.json`, marv 703fd3f; up +Y,
+forward +Z, right +X, no Toes) pass with `--box-mesh 40`: 19 deform bones, the
+validator passes, and the FBX re-imports all of them.
+
+Marv's bodies (marv 73cb490: male 335 672 tris, female 319 404) measured with bpy 5.2.2:
+`--retopo QUADRIFLOW` exits 1, because Quadriflow refuses the mesh (6 452 edges in the
+male are shorter than 0.1 mm on every axis). `--retopo DECIMATE` exits 0 in about 7 s:
+22 000 tris, 19 deform bones, the FBX re-imports all of them, and 70 (male) and
+66 (female) vertices have more than 4 weights (validator warning).
+
+After Marv's `collapse` with a 0.2 mm edge floor (marv 4eccde1: male 322 314 tris,
+female 306 512, shortest edge 0.2 mm) the default `--retopo QUADRIFLOW` exits 0 for
+both in 35–40 s: 19 308 / 21 197 quads, 19 deform bones, no validator issues, and the
+FBX re-imports all of them. Genus is kept for the male (6) and drops from 2 to 1 for the
+female.
+
+Measured with bpy 5.2.2 (no Unity): the Humanoid starter, voxel-remeshed at
+2 cm and written through these files, reproduces the native bone positions
+exactly; per-face groups change 2.5 % of the per-vertex tags (316 of 12 534),
+so weights near bone boundaries differ by up to 0.64
+(`tests/verify_marv_roundtrip.py`; `--oracle-tags` shows the import itself is
+exact when the tags are).
+
 ### Animation
 
 A set of pose-mode panels for animating GTR rigs toward Unity. Pure logic
@@ -248,7 +318,7 @@ conventions:
   tables, UV/texel math, hair surface sampling, animation mirror/loop/breakdown
   math, ghost-frame selection, clip naming). Runs headlessly.
 - **`*_ops.py`** — thin Blender operator/panel shells over the core.
-- **`tests/`** — **242 `pytest` tests** that run without Blender
+- **`tests/`** — **353 `pytest` tests** that run without Blender
   (`python -m pytest tests/`); `conftest.py` loads the core modules directly so
   discovery never imports `bpy`.
 - **`tests/api_audit.py`** + **`tests/verify_rig_axes.py`** — Blender-headless
@@ -260,7 +330,13 @@ conventions:
 python -m pytest tests/                                   # pure-logic tests
 "<blender>" --background --python tests/api_audit.py      # API + operator smoke
 "<blender>" --background --python tests/verify_rig_axes.py # rig/skeleton checks
+python tests/verify_marv_roundtrip.py                     # Marv import vs native GTR (pip bpy)
+python tests/verify_stretch.py character.fbx              # skin stretch at shoulder/hip (pip bpy)
+python tests/verify_webbing.py character.fbx              # torso dragged by raised arms (pip bpy)
 ```
+
+The headless harnesses also run with the `bpy` module from PyPI
+(`pip install bpy==5.2.2`), which needs no Blender install.
 
 ---
 
@@ -273,6 +349,8 @@ python -m pytest tests/                                   # pure-logic tests
 | `uv_ops.py` · `paint_ops.py` · `palette_ops.py` | UV, texture paint, colour palette |
 | `hair_core.py` · `hair_ops.py` | hair/fur presets, spawn, cards |
 | `rigging.py` | GTR bone tables + Generate Rig |
+| `marv_import_core.py` · `marv_import_ops.py` | Import Marv Body (OBJ groups + joints.json → GTR) |
+| `tools/marv_to_unity.py` | headless import → retopo → UV → rig → validate → FBX, with a JSON report |
 | `anim_core/ops` · `picker_*` · `clip_*` · `layer_*` · `onion_*` | animation toolkit |
 | `bake_ops.py` · `export_ops.py` · `validator_*` | bake, Unity FBX, Humanoid validator |
 | `ref_ops.py` · `project_*` · `viz_ops.py` · `handlers.py` | references, project wizard, overlays, save reminder |
@@ -283,10 +361,14 @@ python -m pytest tests/                                   # pure-logic tests
 
 ## Status
 
-**v0.18.0** — the full sculpt-to-Unity pipeline plus the complete animation
+**v0.23.0** — the full sculpt-to-Unity pipeline plus the complete animation
 module (pose/keying/loop, bone picker, clip manager, additive layers, onion
-skin) are implemented and verified in Blender 5.1. 242 headless tests pass and
-the API audit is clean.
+skin) are implemented. Measured 2026-10-19 with bpy 5.2.2: 353 headless tests
+pass; `tests/api_audit.py` reports one problem (hair re-spawn: missing Surface
+Deform modifier), the same on 3b0945e before the Marv import. 2026-11-01: Marv
+FBXs with GTR Tags weights imported into Unity 6000.3.7f1 as valid Humanoid
+avatars, and a Grenade Throw clip drove all of them in Play mode (seen by the
+owner); the Heat-weighted FBXs have not been run in Unity yet.
 
 Onion skinning's FK deform-capture is headless-verified; its **IK-driven**
 deform-capture is verified only interactively (in Blender's background mode IK
@@ -304,8 +386,25 @@ bug). See [`ONION_SKIN_TEST.md`](ONION_SKIN_TEST.md).
 - Bake writes only to faces using the per-mesh bake material; multi-slot meshes
   get a warning. Curvature isn't baked (Substance derives a better one from the
   normal map).
+- `tests/verify_webbing.py` counts torso vertices moved >2 cm by raised arms. It was
+  calibrated on GTR Tags weights; with Heat weights, torso vertices near the armpit
+  carry some upper-arm weight and move with it (Marv trunk: 279 / 463 vertices,
+  max 6.8 cm, against 252–500 and 34–42 cm for the fused-arm case). Its 2 cm
+  threshold does not separate the two; not recalibrated.
 - IK pole-angle math is derived for the default rest pose; editing bones before
-  Generate Rig can twist it.
+  Generate Rig can twist it. Import Marv Body adds no IK chains.
+- The Humanoid starter's **A-Pose** and **Idle** presets do not move the mesh
+  (measured: same vertex extents as T-Pose). `_apply_humanoid_pose` matches
+  parts by object name, and the primitives keep Blender's default names.
+- On the Humanoid starter voxel-remeshed at 2 cm, no vertex carries the
+  `neck`, `clavicle.L` or `clavicle.R` tag: those bones deform nothing.
+- Quadriflow refuses meshes with any edge under 1e-4 on every axis (Blender's
+  `mesh_is_manifold_consistent`). It used to do so with only a warning, and Retopo
+  then reported success on the unchanged mesh. Retopo now fails with the reason.
+- OBJ groups are per face, so a per-vertex tag cannot always survive the file
+  (2.5 % changed in the round-trip check above).
+- The validator requires `LeftShoulder`/`RightShoulder` and `Chest`, which Unity
+  Humanoid itself treats as optional.
 - **DECLARED** FBX axis mode ships with the *Verify Axis Mode* round-trip helper
   rather than a baked-in guarantee — confirm it against your importer once.
 - Non-humanoid rigs beyond the six built-in types are a single-table edit in

@@ -585,6 +585,49 @@ def transfer_bone_tags_from_high(high_obj, low_obj) -> bool:
     return True
 
 
+def _apply_heat_weights(context, mesh_obj, arm_obj):
+    """Bone-heat weights from Blender's Automatic Weights; returns unweighted vertex count.
+
+    parent_set(ARMATURE_AUTO) also parents the mesh and adds its own Armature
+    modifier; the caller re-parents and owns the single "GTR Armature"
+    modifier, so the extra one is removed here.
+    """
+    for vg in mesh_obj.vertex_groups:
+        vg.remove(list(range(len(mesh_obj.data.vertices))))
+    bpy.ops.object.select_all(action='DESELECT')
+    mesh_obj.select_set(True)
+    arm_obj.select_set(True)
+    context.view_layer.objects.active = arm_obj
+    bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+    for mod in [m for m in mesh_obj.modifiers if m.type == 'ARMATURE' and m.name != "GTR Armature"]:
+        mesh_obj.modifiers.remove(mod)
+    # Heat spreads up to 6 bones per vertex on Marv bodies; Unity skins with 4
+    # by default and drops the rest unnormalised. Cap and renormalise here.
+    context.view_layer.objects.active = mesh_obj
+    bpy.ops.object.vertex_group_limit_total(group_select_mode='ALL', limit=4)
+    bpy.ops.object.vertex_group_normalize_all(group_select_mode='ALL', lock_active=False)
+    deform = {b.name for b in arm_obj.data.bones if b.use_deform}
+    deform_idx = {vg.index for vg in mesh_obj.vertex_groups if vg.name in deform}
+    return sum(
+        1 for v in mesh_obj.data.vertices
+        if not any(g.group in deform_idx and g.weight > 1e-3 for g in v.groups)
+    )
+
+
+def _discard_armature(mesh_obj, arm_obj):
+    """Undo a half-built rig: unparent (keeping the world transform) and delete it."""
+    for mod in [m for m in mesh_obj.modifiers if m.type == 'ARMATURE']:
+        mesh_obj.modifiers.remove(mod)
+    if mesh_obj.parent is arm_obj:
+        world = mesh_obj.matrix_world.copy()
+        mesh_obj.parent = None
+        mesh_obj.matrix_world = world
+    arm_data = arm_obj.data
+    bpy.data.objects.remove(arm_obj, do_unlink=True)
+    if arm_data.users == 0:
+        bpy.data.armatures.remove(arm_data, do_unlink=True)
+
+
 class PIPESCULPT_OT_generate_rig(Operator):
     bl_idname = "pipe_sculpt.generate_rig"
     bl_label = "Generate Rig"
@@ -602,6 +645,20 @@ class PIPESCULPT_OT_generate_rig(Operator):
             "you rig the retopo low-poly instead"
         ),
         default=False,
+    )
+
+    weights: bpy.props.EnumProperty(
+        name="Weights",
+        description="How skin weights are computed once the armature is built",
+        items=(
+            ('GTR', "GTR Tags",
+             "Weight 1.0 on each vertex's tagged bone, then smooth (factor 0.5, 3 passes)"),
+            ('HEAT', "Heat",
+             "Blender's bone-heat weights (Automatic Weights). Tags still build the "
+             "skeleton; the weights ignore them. Measured on Marv bodies: far less "
+             "stretch at shoulder and hip than GTR Tags"),
+        ),
+        default='GTR',
     )
 
     @classmethod
@@ -718,14 +775,28 @@ class PIPESCULPT_OT_generate_rig(Operator):
             if name not in mesh_obj.vertex_groups:
                 mesh_obj.vertex_groups.new(name=name)
 
-        attr = mesh_obj.data.attributes[VERTEX_ATTR]
-        # Map storage-order index -> bone name (DEFORM_BONE_NAMES is the canonical order)
-        for vi in range(len(mesh_obj.data.vertices)):
-            bi = attr.data[vi].value
-            if 0 <= bi < len(DEFORM_BONE_NAMES):
-                vg_name = DEFORM_BONE_NAMES[bi]
-                if vg_name in mesh_obj.vertex_groups:
-                    mesh_obj.vertex_groups[vg_name].add([vi], 1.0, 'REPLACE')
+        if self.weights == 'HEAT':
+            unweighted = _apply_heat_weights(context, mesh_obj, arm_obj)
+            if unweighted:
+                # Bone heat fails per island and only warns; a partly weighted
+                # mesh would export and look fine at rest. Refuse instead.
+                _discard_armature(mesh_obj, arm_obj)
+                self.report(
+                    {'ERROR'},
+                    f"Heat weighting left {unweighted:,} of {len(mesh_obj.data.vertices):,} "
+                    "vertices without a deform weight (bone heat found no solution "
+                    "for part of the mesh). Use Weights: GTR Tags, or fix the mesh",
+                )
+                return {'CANCELLED'}
+        else:
+            attr = mesh_obj.data.attributes[VERTEX_ATTR]
+            # Map storage-order index -> bone name (DEFORM_BONE_NAMES is the canonical order)
+            for vi in range(len(mesh_obj.data.vertices)):
+                bi = attr.data[vi].value
+                if 0 <= bi < len(DEFORM_BONE_NAMES):
+                    vg_name = DEFORM_BONE_NAMES[bi]
+                    if vg_name in mesh_obj.vertex_groups:
+                        mesh_obj.vertex_groups[vg_name].add([vi], 1.0, 'REPLACE')
 
         # --- Parent + Armature modifier ---
         mesh_obj.parent = arm_obj
@@ -739,7 +810,10 @@ class PIPESCULPT_OT_generate_rig(Operator):
         arm_mod.use_bone_envelopes = False
 
         # --- Smooth weights ---
-        if not bpy.app.background:
+        # Runs in background mode too (measured with bpy 5.2.2: WEIGHT_PAINT +
+        # vertex_group_smooth works headless). Skipping it there left headless
+        # rigs with hard 1.0 weights, i.e. rigid segments.
+        if self.weights == 'GTR':
             context.view_layer.objects.active = mesh_obj
             try:
                 bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
