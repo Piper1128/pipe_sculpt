@@ -196,7 +196,11 @@ Measured 2026-11-01 on Marv's trunk bodies (marv dcbcc6b, Quadriflow 22k,
 the tagged bone and its skeleton neighbours tears a seam at every tag border
 (82–117 stretched), so that mix is not offered. In Unity (Grenade Throw clip)
 the GTR FBXs had 0.7–1.4 % of triangles stretched against 0.09 % for a
-reference character; the Heat FBXs have not been run in Unity yet.
+reference character. The Heat FBXs were run in Unity 6000.3.7f1 on
+2026-11-01 (same clip, worst sample): male 0 of 33 472 triangles stretched
+(max 2.49x, just under the threshold), female 54 of 39 456 = 0.14 % (max
+3.24x, a band on the rib cage); the reference character 38 of 43 950 = 0.09 %
+(max 8.15x).
 
 #### Import Marv Body (GTR tags from a file)
 
