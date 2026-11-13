@@ -246,6 +246,9 @@ mv-cli built before marv 50149b0. Known case, 2026-11-13: the male body at marv 
 gives OBJ md5 `404854ba…` and joints md5 `2b83eb7a…`, byte for byte the files behind
 `marv-male-viewmodel.fbx`, and the same report (21 025 verts; Arms 5 144, Head 705,
 Body 15 182 faces; validator passing). The FBX's own md5 differs from run to run.
+The same OBJ through Blender 5.1 on Windows (mv-cli built with MSVC gave the same OBJ md5)
+retopologises differently: Arms 5 067, Head 738, Body 13 687 faces, validator passing. The
+retopo is a function of the Blender version, so the manifest's `runner` is part of the result.
 
 Marv's example files (`joints-male.json`, `joints-female.json`, marv 703fd3f; up +Y,
 forward +Z, right +X, no Toes) pass with `--box-mesh 40`: 19 deform bones, the
