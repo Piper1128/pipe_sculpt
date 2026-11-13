@@ -196,7 +196,11 @@ Measured 2026-11-01 on Marv's trunk bodies (marv dcbcc6b, Quadriflow 22k,
 the tagged bone and its skeleton neighbours tears a seam at every tag border
 (82–117 stretched), so that mix is not offered. In Unity (Grenade Throw clip)
 the GTR FBXs had 0.7–1.4 % of triangles stretched against 0.09 % for a
-reference character; the Heat FBXs have not been run in Unity yet.
+reference character. The Heat FBXs were run in Unity 6000.3.7f1 on
+2026-11-01 (same clip, worst sample): male 0 of 33 472 triangles stretched
+(max 2.49x, just under the threshold), female 54 of 39 456 = 0.14 % (max
+3.24x, a band on the rib cage); the reference character 38 of 43 950 = 0.09 %
+(max 8.15x).
 
 #### Import Marv Body (GTR tags from a file)
 
@@ -228,6 +232,23 @@ python tools/marv_to_unity.py joints.json out.fbx --box-mesh 40   # joints only:
 python tools/marv_to_unity.py joints.json out.fbx --weights GTR    # tag weights instead of Heat (default)
 python tests/verify_stretch.py out.fbx --max 100                   # exit 1 if a pose tears >100 tris
 ```
+
+From Marv's own binary to the FBX in one call (`tools/marv_pipeline.py`; Blender
+via `--blender PATH`, or a Python with `bpy` via `--bpy-python PATH`):
+
+```bash
+python tools/marv_pipeline.py out/ --mv-cli marv/build/apps/mv-cli/mv-cli --marv-repo marv \
+    --sex male --sex female --split-viewmodel --blender "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe"
+```
+
+It refuses (exit 1) a joints.json without `shoulder_joint_centre_below_acromion`, i.e. an
+mv-cli built before marv 50149b0. Known case, 2026-11-13: the male body at marv 204e909
+gives OBJ md5 `404854ba…` and joints md5 `2b83eb7a…`, byte for byte the files behind
+`marv-male-viewmodel.fbx`, and the same report (21 025 verts; Arms 5 144, Head 705,
+Body 15 182 faces; validator passing). The FBX's own md5 differs from run to run.
+The same OBJ through Blender 5.1 on Windows (mv-cli built with MSVC gave the same OBJ md5)
+retopologises differently: Arms 5 067, Head 738, Body 13 687 faces, validator passing. The
+retopo is a function of the Blender version, so the manifest's `runner` is part of the result.
 
 Marv's example files (`joints-male.json`, `joints-female.json`, marv 703fd3f; up +Y,
 forward +Z, right +X, no Toes) pass with `--box-mesh 40`: 19 deform bones, the
@@ -351,6 +372,7 @@ The headless harnesses also run with the `bpy` module from PyPI
 | `rigging.py` | GTR bone tables + Generate Rig |
 | `marv_import_core.py` · `marv_import_ops.py` | Import Marv Body (OBJ groups + joints.json → GTR) |
 | `tools/marv_to_unity.py` | headless import → retopo → UV → rig → validate → FBX, with a JSON report |
+| `tools/marv_pipeline.py` | Marv's mv-cli (joints + body OBJ) → `marv_to_unity.py` → `manifest.json` with every file's md5, in one call |
 | `anim_core/ops` · `picker_*` · `clip_*` · `layer_*` · `onion_*` | animation toolkit |
 | `bake_ops.py` · `export_ops.py` · `validator_*` | bake, Unity FBX, Humanoid validator |
 | `ref_ops.py` · `project_*` · `viz_ops.py` · `handlers.py` | references, project wizard, overlays, save reminder |
