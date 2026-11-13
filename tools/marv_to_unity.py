@@ -19,6 +19,10 @@ Options:
     --box-mesh MM        no OBJ yet: write one axis-aligned box per joint (head..tail,
                          grown by MM in the file's unit) and use it. Tests the joints
                          and the chain, not a body.
+    --split-viewmodel    export three skinned meshes, <name>_Arms, <name>_Head and
+                         <name>_Body, each face going where its heaviest bone puts it
+                         (viewmodel_core.py), so IronCore's player builder layers the
+                         arms on the viewmodel and hides the head (GHT lab 0064)
 
 Exit code 0 = validator passed and the FBX re-imports with every deform
 bone; 1 = it did not; 2 = import failed. The report says which.
@@ -49,6 +53,7 @@ def _args():
     p.add_argument("--fixture", default="")
     p.add_argument("--fixture-drop", action="append", default=[])
     p.add_argument("--box-mesh", type=float, default=0.0)
+    p.add_argument("--split-viewmodel", action="store_true")
     return p.parse_args(argv)
 
 
@@ -177,7 +182,16 @@ def _run(args, report):
         "facing_y": data["mesh_facing_y"],
     }
 
-    bpy.context.view_layer.objects.active = mesh
+    exported = [mesh]
+    if args.split_viewmodel:
+        exported = _split_viewmodel(bpy, mesh, report)
+        if exported is None:
+            return 1
+        bpy.ops.object.select_all(action='DESELECT')
+        for o in exported:
+            o.select_set(True)
+        arm.select_set(True)
+    bpy.context.view_layer.objects.active = exported[0]
     if not step("export_unity_fbx", lambda: bpy.ops.pipe_sculpt.export_unity_fbx(filepath=args.fbx)):
         return 1
     report["fbx"] = {"path": args.fbx, "bytes": os.path.getsize(args.fbx)}
@@ -186,20 +200,60 @@ def _run(args, report):
     deform = set(report["armature"]["deform"])
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.fbx(filepath=args.fbx)
-    fbx_bones, fbx_groups = set(), set()
+    fbx_bones, fbx_groups, fbx_meshes = set(), set(), {}
     for ob in bpy.data.objects:
         if ob.type == 'ARMATURE':
             fbx_bones |= {b.name for b in ob.data.bones}
         elif ob.type == 'MESH':
             fbx_groups |= {g.name for g in ob.vertex_groups}
+            fbx_meshes[ob.name] = {"verts": len(ob.data.vertices), "faces": len(ob.data.polygons)}
     report["fbx"].update({
         "bones": sorted(fbx_bones),
         "missing_deform_bones": sorted(deform - fbx_bones),
         "extra_bones": sorted(fbx_bones - deform),
         "vertex_groups": len(fbx_groups),
+        "meshes": fbx_meshes,
     })
     ok = result.is_passing and not report["fbx"]["missing_deform_bones"]
     return 0 if ok else 1
+
+
+def _split_viewmodel(bpy, mesh, report):
+    """Split the rigged mesh into _Arms, _Head and _Body copies by viewmodel_core."""
+    import bmesh
+    sys.path.insert(0, _ADDON_ROOT)
+    import viewmodel_core as vc
+    names = {g.index: g.name for g in mesh.vertex_groups}
+    weights = [{names[g.group]: g.weight for g in v.groups} for v in mesh.data.vertices]
+    faces = [tuple(p.vertices) for p in mesh.data.polygons]
+    parts = vc.split_faces(faces, weights)
+    report["viewmodel_split"] = {k: len(v) for k, v in parts.items()}
+    if not parts[vc.BODY] or not parts[vc.ARMS]:
+        report["notes"].append("viewmodel split left the arms or the body empty")
+        return None
+    base = mesh.name
+    out = []
+    for part in (vc.ARMS, vc.HEAD, vc.BODY):
+        if not parts[part]:
+            continue
+        ob = mesh.copy()
+        ob.data = mesh.data.copy()
+        ob.name = ob.data.name = "%s_%s" % (base, part)
+        bpy.context.scene.collection.objects.link(ob)
+        keep = set(parts[part])
+        bm = bmesh.new()
+        bm.from_mesh(ob.data)
+        bm.faces.ensure_lookup_table()
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.index not in keep], context='FACES')
+        loose = [v for v in bm.verts if not v.link_faces]
+        bmesh.ops.delete(bm, geom=loose, context='VERTS')
+        bm.to_mesh(ob.data)
+        bm.free()
+        out.append(ob)
+    bpy.data.objects.remove(mesh, do_unlink=True)
+    report["viewmodel_meshes"] = {o.name: {"verts": len(o.data.vertices),
+                                           "faces": len(o.data.polygons)} for o in out}
+    return out
 
 
 def main():
