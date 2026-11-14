@@ -21,6 +21,11 @@ Unity-side settings. We expose them as `axis_mode`:
     Blender source.
 
 Other Unity-relevant settings are constants:
+  - apply_scale_options = 'FBX_SCALE_ALL': the unit scale is written into the file's
+    unit (UnitScaleFactor 100, metres) and not onto the armature's node. With
+    'FBX_SCALE_NONE' the armature's Null carried Lcl Scaling 100 in a file in
+    centimetres, and Unity imported every bone with lossyScale 100: RagdollRuntime built
+    26 m capsules (GHT lab/data/0064, 2026-11-14). tools/fbx_transforms.py reads it back.
   - apply_transforms baked via use_mesh_modifiers (no negative scales)
   - use_armature_deform_only = True (only deform bones reach Unity Humanoid)
   - mesh_smooth_type = 'FACE' (matches MikkTSpace tangent generation)
@@ -159,7 +164,7 @@ class PIPESCULPT_OT_export_unity_fbx(Operator, ExportHelper):
                 use_active_collection=False,
                 global_scale=1.0,
                 apply_unit_scale=True,
-                apply_scale_options='FBX_SCALE_NONE',
+                apply_scale_options='FBX_SCALE_ALL',
                 bake_space_transform=(self.axis_mode == 'BAKED'),
                 axis_forward='-Z',
                 axis_up='Y',
@@ -283,7 +288,7 @@ class PIPESCULPT_OT_export_axis_calibration(Operator):
                     use_active_collection=False,
                     global_scale=1.0,
                     apply_unit_scale=True,
-                    apply_scale_options='FBX_SCALE_NONE',
+                    apply_scale_options='FBX_SCALE_ALL',
                     bake_space_transform=(mode_id == 'BAKED'),
                     axis_forward='-Z',
                     axis_up='Y',

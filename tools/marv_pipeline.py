@@ -28,8 +28,12 @@ with the commit time instead, and refused the cloud's mv-cli, built from the
 working tree 12 s before 50149b0 was committed; the date says nothing about
 what was compiled. --marv-repo only records the commit in the manifest.
 
+After export, tools/fbx_transforms.py --require-unit-scale reads the FBX back: a Model
+with a Lcl Scaling other than 1 is refused (exit 1), since Unity imports it as that scale.
+
 Exit 0 = every body built and exported; 1 = mv-cli refused, an md5 did not
-match, the required quantity is missing, or marv_to_unity failed; 2 = could not run (no
+match, the required quantity is missing, marv_to_unity failed, or the FBX carries a
+scale; 2 = could not run (no
 mv-cli, no Blender, unreadable arguments). Nothing that could not run is
 reported as a result.
 """
@@ -240,6 +244,23 @@ def main(argv=None):
             body["to_unity_tail"] = (q.stdout + q.stderr)[-2000:]
             return finish(1, "%s: marv_to_unity exit %d" % (sex, q.returncode))
         body["fbx_md5"] = md5(fbx)
+        # Unity's scale comes from the file's nodes: every Model's Lcl Scaling must be 1
+        # (tools/fbx_transforms.py; the armature's 100 was GHT lab/data/0064's 26 m ragdoll)
+        check = os.path.join(_TOOLS, "fbx_transforms.py")
+        cargs = [fbx, "--require-unit-scale"]
+        ccmd = (blender_cmd(a.blender, check, cargs) if a.blender
+                else [a.bpy_python, check] + cargs)
+        c = subprocess.run(ccmd, capture_output=True, text=True, timeout=600)
+        body["unit_scale_check"] = {"exit": c.returncode,
+                                    "lines": [l for l in c.stdout.splitlines()
+                                              if l.startswith(("NOT UNIT", "turned top",
+                                                               "UnitScale", "fbx_transforms"))]}
+        if c.returncode == 2:
+            return finish(2, "%s: the FBX's scale could not be read: %s"
+                          % (sex, (c.stdout + c.stderr)[-400:]))
+        if c.returncode != 0:
+            return finish(1, "%s: FBX carries a scale: %s"
+                          % (sex, "; ".join(body["unit_scale_check"]["lines"])))
         with open(rep, encoding="utf-8") as f:
             r = json.load(f)
         body["validator_passing"] = r.get("validator", {}).get("passing")

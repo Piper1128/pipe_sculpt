@@ -250,6 +250,19 @@ The same OBJ through Blender 5.1 on Windows (mv-cli built with MSVC gave the sam
 retopologises differently: Arms 5 067, Head 738, Body 13 687 faces, validator passing. The
 retopo is a function of the Blender version, so the manifest's `runner` is part of the result.
 
+**Scale in Unity (2026-11-14).** The Unity export wrote the unit scale onto the armature:
+the file was in centimetres (UnitScaleFactor 1) and the armature's Null carried Lcl Scaling
+100, so Unity imported every bone with lossyScale 100 and IronCore's RagdollRuntime built
+26 m capsules (GHT lab/data/0064). `export_unity_fbx` now uses
+`apply_scale_options='FBX_SCALE_ALL'`: UnitScaleFactor 100 (metres), every node scale 1,
+the validator still passing and the bodies the same size on re-import. After export,
+`marv_pipeline` reads the file back with `tools/fbx_transforms.py --require-unit-scale` and
+refuses (exit 1) any node with a scale. Measured with bpy 5.1.2 on the male A-pose body
+(OBJ `fb43e07c…`): the old export exits 1 on `Lcl Scaling [100, 100, 100]`, the new one
+exits 0. Not changed, and printed by the check: the armature's Null keeps a -90° x
+rotation with +90° on its root bone (Blender's axis conversion; net 0). Not yet measured
+in Unity, and the check has not been run under Blender's own executable.
+
 Marv's example files (`joints-male.json`, `joints-female.json`, marv 703fd3f; up +Y,
 forward +Z, right +X, no Toes) pass with `--box-mesh 40`: 19 deform bones, the
 validator passes, and the FBX re-imports all of them.
@@ -373,6 +386,7 @@ The headless harnesses also run with the `bpy` module from PyPI
 | `marv_import_core.py` · `marv_import_ops.py` | Import Marv Body (OBJ groups + joints.json → GTR) |
 | `tools/marv_to_unity.py` | headless import → retopo → UV → rig → validate → FBX, with a JSON report |
 | `tools/marv_pipeline.py` | Marv's mv-cli (joints + body OBJ) → `marv_to_unity.py` → `manifest.json` with every file's md5, in one call |
+| `tools/fbx_transforms.py` | An FBX's unit and every node's local rotation and scale, read with Blender's parser; `--require-unit-scale` exits 1 on any node scale |
 | `anim_core/ops` · `picker_*` · `clip_*` · `layer_*` · `onion_*` | animation toolkit |
 | `bake_ops.py` · `export_ops.py` · `validator_*` | bake, Unity FBX, Humanoid validator |
 | `ref_ops.py` · `project_*` · `viz_ops.py` · `handlers.py` | references, project wizard, overlays, save reminder |
