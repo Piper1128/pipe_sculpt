@@ -10,7 +10,9 @@ Run (pip bpy or Blender):
 
 Known cases (2026-11-01, Marv trunk bodies, Quadriflow 22k, measured on the rig
 before export with the same poses): GTR Tags weights male 162 (arm) / 169 (hip),
-female 176 / 274; Heat weights male 2 / 0, female 22 / 0. Unity's own measure on
+female 176 / 274; Heat weights uncapped male 2 / 0, female 22 / 0. On the exported
+FBX with the 4-bone cap (marv_to_unity's default): Heat male 24 / 10, female
+75 / 37 (README, reproduced 2026-11-11). Unity's own measure on
 the GTR FBXs (Grenade Throw clip) put them at 0.7-1.4 % of triangles stretched,
 against 0.09 % for GHT's SK_Military_Survivalist.
 """

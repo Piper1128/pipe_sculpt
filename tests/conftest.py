@@ -31,6 +31,11 @@ _load_module_by_path('hair_core', 'hair_core.py')
 _load_module_by_path('validator_core', 'validator_core.py')
 # marv_import_core imports validator_core (loaded above).
 _load_module_by_path('marv_import_core', 'marv_import_core.py')
+_load_module_by_path('viewmodel_core', 'viewmodel_core.py')
+# tools/marv_pipeline.py is bpy-free; its pure functions are tested directly.
+_load_module_by_path('marv_pipeline', os.path.join('tools', 'marv_pipeline.py'))
+# tools/fbx_transforms.py: its judgement (faults, turned_tops) is bpy-free.
+_load_module_by_path('fbx_transforms', os.path.join('tools', 'fbx_transforms.py'))
 _load_module_by_path('project_core', 'project_core.py')
 _load_module_by_path('palette_core', 'palette_core.py')
 _load_module_by_path('anim_core', 'anim_core.py')

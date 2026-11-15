@@ -9,7 +9,7 @@ Known cases (2026-10-19, Marv bodies through tools/marv_to_unity.py):
 arms down, fused to the torso: male 252 verts dragged (max 34.2 cm), female 500
 (max 42.5 cm); arms turned 12 deg out (marv adf8dcd): 0 and 0 (max 0.5 cm).
 """
-import sys, math, bpy, bmesh
+import os, sys, math, bpy, bmesh
 from mathutils import Matrix, Vector
 fbx = sys.argv[-1]
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -47,4 +47,5 @@ posed = [me.matrix_world @ v.co for v in me.evaluated_get(dg).to_mesh().vertices
 torso = {"pelvis", "spine", "chest", "upper_leg.L", "upper_leg.R"}
 moved = [i for i, d in enumerate(dom) if d in torso and (posed[i] - rest[i]).length > 0.02]
 mx = max(((posed[i] - rest[i]).length for i, d in enumerate(dom) if d in torso), default=0)
-print(f"{fbx.split('/')[-2]}/{fbx.split('/')[-1]}: Euler {euler}, torso verts dragged >2 cm: {len(moved)} of {sum(1 for d in dom if d in torso)}, max {mx*100:.1f} cm")
+label = os.path.join(os.path.basename(os.path.dirname(os.path.abspath(fbx))), os.path.basename(fbx))
+print(f"{label}: Euler {euler}, torso verts dragged >2 cm: {len(moved)} of {sum(1 for d in dom if d in torso)}, max {mx*100:.1f} cm")
