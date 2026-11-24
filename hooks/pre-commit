@@ -1,0 +1,34 @@
+#!/bin/sh
+# Wire it per clone:  git config core.hooksPath hooks
+# (a hook nobody wired is a gate that is silently off).
+
+# --- secrets (Kodeks gate 1) -----------------------------------------------
+#
+# gitleaks over what this commit adds, on EVERY commit: a key can sit in any
+# file, not only in lab/ or C++. tools/hemmeligheder.py is a COPY of kodeks'
+# file (K-010 forbids depending on Kodeks); kodeks' tools/tjek_kopier.py
+# checks it for drift. Its exit is the lab's: 0 nothing, 1 found, 2 could
+# not decide (gitleaks missing or too old). 2 refuses the commit too,
+# because a skipped scan reads exactly like a clean one. An accepted
+# finding goes in .gitleaksignore by fingerprint, with the reason. Added on
+# request, the owner's choice 2026-11-23 18:25:18Z ("Kun gate-trinnet, via
+# request"); kodeks lab/data/0015 has the drill.
+PY=python
+command -v "$PY" >/dev/null 2>&1 || PY=python3
+if ! command -v "$PY" >/dev/null 2>&1; then
+    echo "pre-commit: python not found, and the secrets gate runs on every commit." >&2
+    echo "pre-commit: install it or commit with --no-verify IF you know why." >&2
+    exit 1
+fi
+if [ ! -f tools/hemmeligheder.py ]; then
+    echo "pre-commit: tools/hemmeligheder.py is missing; the secrets gate cannot run." >&2
+    exit 1
+fi
+"$PY" tools/hemmeligheder.py --staged
+case $? in
+    0) ;;
+    1) echo "pre-commit: the secrets gate found something in this commit (above)." >&2; exit 1 ;;
+    *) echo "pre-commit: the secrets gate could not decide; commit refused." >&2; exit 1 ;;
+esac
+
+exit 0
