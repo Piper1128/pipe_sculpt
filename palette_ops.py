@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import bpy
-from bpy.props import FloatVectorProperty, IntProperty
+from bpy.props import IntProperty
 from bpy.types import Operator, Panel
 
 from . import palette_core
@@ -111,7 +111,7 @@ class PIPESCULPT_PT_palette(Panel):
             for col in range(4):
                 idx = row * 4 + col
                 sub = row_layout.row(align=True)
-                color = palette[idx]
+                color = palette[idx]  # noqa: F841  -- read, never shown: the button is not coloured (Kodeks gate 4)
                 # Apply button (colored)
                 op = sub.operator(
                     "pipe_sculpt.palette_apply_slot",

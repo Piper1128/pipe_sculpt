@@ -11,7 +11,6 @@ adding a new check is a single function + a single test.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 
 # Unity Humanoid required bone names (case-sensitive in Mecanim).

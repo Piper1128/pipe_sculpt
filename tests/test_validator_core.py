@@ -1,7 +1,6 @@
 """Headless tests for validator_core."""
 from __future__ import annotations
 
-import pytest
 
 # validator_core is preloaded by conftest.py
 import validator_core as vc  # noqa: E402

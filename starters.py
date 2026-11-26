@@ -339,7 +339,6 @@ class PIPESCULPT_OT_starter_humanoid(Operator):
         }
 
         for part in parts:
-            tag = part.get(rigging.VERTEX_ATTR + "_label") if hasattr(part, 'get') else None
             # Tags are stored as per-vertex int attribute; identify via name
             # heuristic since we tag during starter creation
             name_lower = part.name.lower() if part.name else ""

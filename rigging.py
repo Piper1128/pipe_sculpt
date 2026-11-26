@@ -17,7 +17,6 @@ UNVERIFIED ASSUMPTIONS (P3, pending interactive Blender test):
 from __future__ import annotations
 
 import json
-import math
 
 import bpy
 import mathutils

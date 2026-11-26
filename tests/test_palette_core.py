@@ -1,7 +1,6 @@
 """Tests for palette_core — serialization round-trip + defensive decoding."""
 from __future__ import annotations
 
-import pytest
 
 import palette_core as pal  # noqa: E402
 

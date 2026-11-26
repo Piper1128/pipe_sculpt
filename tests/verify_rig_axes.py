@@ -16,10 +16,8 @@ tester de RIGTIGE data, ikke en kopi.
 """
 import os
 import sys
-import math
 
 import bpy
-import mathutils
 
 # Gør addon-roden importérbar (scriptet ligger i tests/).
 _ADDON_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

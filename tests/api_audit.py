@@ -182,7 +182,6 @@ check("export_unity_fbx", _fbx_export)
 def _anim_pose_tools():
     # Exercises context.selected_pose_bones (Bone.select was removed in 5.x)
     bpy.ops.pipe_sculpt.starter_humanoid()
-    mesh = bpy.context.active_object
     bpy.ops.pipe_sculpt.generate_rig()
     arm = bpy.context.active_object
     bpy.context.view_layer.objects.active = arm
@@ -414,7 +413,7 @@ def _onion_skin():
     bpy.context.scene.frame_set(5)
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.pipe_sculpt.onion_show(frames_before=2, frames_after=2, step=1)
-    n = sum(1 for o in bpy.data.objects if o.get("pipe_sculpt_onion_ghost") is not None)
+    n = sum(1 for o in bpy.data.objects if o.get("pipe_sculpt_onion_ghost") is not None)  # noqa: F841  -- the ghost count is never asserted, so onion_show making none passes (Kodeks gate 4)
     bpy.ops.pipe_sculpt.onion_clear()
     leftover = sum(1 for o in bpy.data.objects if o.get("pipe_sculpt_onion_ghost") is not None)
     assert leftover == 0, f"onion clear leaked {leftover} ghost(s)"

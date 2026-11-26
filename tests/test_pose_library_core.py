@@ -1,7 +1,6 @@
 """Headless unit tests for pose_library_core (pure, no bpy)."""
 from __future__ import annotations
 
-import math
 
 import pytest
 
