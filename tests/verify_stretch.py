@@ -18,7 +18,7 @@ import math
 import sys
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
 fbx = argv[0]

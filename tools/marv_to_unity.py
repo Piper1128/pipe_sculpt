@@ -106,7 +106,6 @@ def _run(args, report):
     addon = addon_utils.enable(_ADDON_NAME, default_set=True)
     if addon is None:  # enable() reports and returns None on failure
         raise RuntimeError(f"could not enable addon '{_ADDON_NAME}' from {_ADDON_PARENT}")
-    rigging = sys.modules[f"{_ADDON_NAME}.rigging"]
     validator_core = sys.modules[f"{_ADDON_NAME}.validator_core"]
     validator_ops = sys.modules[f"{_ADDON_NAME}.validator_ops"]
 
@@ -136,7 +135,7 @@ def _run(args, report):
             prefs.preferences.target_faces_character = args.target_faces
         else:
             report["notes"].append(
-                f"addon preferences absent; retopo uses the preset default target")
+                "addon preferences absent; retopo uses the preset default target")
         if not step("workflow_retopo", lambda: bpy.ops.pipe_sculpt.workflow_retopo(method=args.retopo)):
             return 1
         mesh = bpy.context.active_object

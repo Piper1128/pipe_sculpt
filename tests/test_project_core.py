@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 import tempfile
 
-import pytest
 
 import project_core as pc  # noqa: E402
 
